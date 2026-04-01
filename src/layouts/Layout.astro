@@ -1,0 +1,47 @@
+---
+import "@/src/styles/global.css";
+import meta from "@/meta.json";
+import Header from "@/src/components/header.astro";
+import ToastNotification from "@/src/components/toast-notification.astro";
+interface Props {
+    title?: string;
+    description?: string;
+    showResetModal?: boolean;
+}
+const { title, description, showResetModal = false } = Astro.props;
+---
+
+<html lang="es">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width" />
+        <meta name="generator" content={Astro.generator} />
+
+        <!-- SEO -->
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="icon" href="/favicon.ico" />
+
+        <title>{title || meta.nombre}</title>
+        <meta name="description" content={description || meta.description} />
+        <meta name="keywords" content={meta.keywords.join(", ")} />
+        <meta name="author" content={meta.author} />
+        <!-- Open Graph -->
+        <meta name="og:title" content={meta.OG.title} />
+        <meta name="og:description" content={meta.OG.description} />
+        <meta name="og:image" content={meta.OG.image} />
+        <meta name="og:url" content={meta.OG.url} />
+        <!-- Twitter -->
+        <meta name="twitter:title" content={meta.twitter.title} />
+        <meta name="twitter:description" content={meta.twitter.description} />
+        <meta name="twitter:image" content={meta.twitter.image} />
+        <meta name="twitter:url" content={meta.twitter.url} />
+    </head>
+
+    <body class="max-w-6xl mx-auto px-4 md:px-6">
+        <Header title={meta.nombre} showResetModal={showResetModal} />
+        <main class="py-8">
+            <slot />
+        </main>
+        <ToastNotification />
+    </body>
+</html>

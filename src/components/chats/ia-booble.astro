@@ -1,0 +1,20 @@
+---
+import Sparkles from "@/src/assets/sparkles.astro";
+---
+
+<article
+    class="flex gap-3 max-w-[85%] animate-in fade-in slide-in-from-left-2 duration-300"
+>
+    <div
+        class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0 shadow-sm border-2 border-primary/20 text-white"
+    >
+        <Sparkles class="w-4 h-4" />
+    </div>
+    <p
+        class="bg-white border border-border/50 shadow-sm rounded-2xl rounded-tl-none px-4 py-2.5 text-sm text-text transition-colors"
+    >
+        ¡Hola! Soy tu asistente. Cuéntame qué producto quieres registrar. Por
+        ejemplo: <i>"Agrega una camiseta de algodón negra, talla L"</i> y trataré
+        de rellenar los datos.
+    </p>
+</article>

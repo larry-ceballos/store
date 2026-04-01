@@ -1,0 +1,134 @@
+<div
+    id="toast-container"
+    class="fixed bottom-6 right-6 z-10000 flex flex-col gap-3 pointer-events-none max-w-[90vw] md:max-w-md"
+>
+</div>
+
+<script>
+    class ToastManager {
+        private container: HTMLElement | null = null;
+
+        constructor() {
+            this.container = document.getElementById("toast-container");
+            // Expose globally
+            (window as any).showToast = this.show.bind(this);
+        }
+
+        show(
+            message: string,
+            type: "success" | "error" | "info" | "warning" = "info",
+            duration = 4000,
+        ) {
+            if (!this.container) return;
+
+            const toast = document.createElement("div");
+
+            // Base styles and conditional colors
+            const baseClasses =
+                "flex items-center gap-3 px-4 py-3 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-2 backdrop-blur-md transition-all duration-500 translate-y-4 opacity-0 pointer-events-auto min-w-[280px]";
+
+            let typeClasses = "";
+            switch (type) {
+                case "success":
+                    typeClasses =
+                        "bg-green-50/90 border-green-200 text-green-800";
+                    break;
+                case "error":
+                    typeClasses = "bg-red-50/90 border-red-200 text-red-800";
+                    break;
+                case "warning":
+                    typeClasses =
+                        "bg-amber-50/90 border-amber-200 text-amber-800";
+                    break;
+                default:
+                    typeClasses = "bg-white/90 border-border text-primary";
+            }
+
+            toast.className = `${baseClasses} ${typeClasses}`;
+
+            const icon = this.getIcon(type);
+            toast.innerHTML = `
+                <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${type === "success" ? "bg-green-100" : type === "error" ? "bg-red-100" : type === "warning" ? "bg-amber-100" : "bg-gray-100"}">
+                    ${icon}
+                </div>
+                <div class="flex-1">
+                    <p class="text-sm font-bold leading-tight">${message}</p>
+                </div>
+                <button class="ml-2 p-1 rounded-lg hover:bg-black/5 transition-colors opacity-40 hover:opacity-100" aria-label="Close">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            `;
+
+            // Close button logic
+            const closeBtn = toast.querySelector("button");
+            closeBtn?.addEventListener("click", () => this.removeToast(toast));
+
+            // Add to container
+            this.container.appendChild(toast);
+
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.classList.remove("translate-y-4", "opacity-0");
+                toast.classList.add("translate-y-0", "opacity-100");
+            });
+
+            // Auto-remove
+            if (duration > 0) {
+                setTimeout(() => this.removeToast(toast), duration);
+            }
+        }
+
+        private removeToast(toast: HTMLElement) {
+            if (!toast.parentElement) return;
+
+            toast.classList.remove("translate-y-0", "opacity-100");
+            toast.classList.add("translate-y-2", "opacity-0", "scale-95");
+
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.remove();
+                }
+            }, 500);
+        }
+
+        private getIcon(type: string) {
+            switch (type) {
+                case "success":
+                    return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-green-600"><path d="M20 6L9 17l-5-5"></path></svg>';
+                case "error":
+                    return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-red-600"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+                case "warning":
+                    return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+                default:
+                    return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-primary"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+            }
+        }
+    }
+
+    // Initialize ToastManager if not already initialized
+    if (!(window as any).showToast) {
+        new ToastManager();
+    }
+</script>
+
+<style>
+    #toast-container {
+        /* Ensure it's above almost everything */
+        pointer-events: none;
+    }
+
+    #toast-container > div {
+        pointer-events: auto;
+        /* Prevent layout shift when multiple toasts are present */
+        margin-top: 0.75rem;
+    }
+
+    @media (max-width: 640px) {
+        #toast-container {
+            right: 1rem;
+            left: 1rem;
+            bottom: 1.5rem;
+            align-items: center;
+        }
+    }
+</style>

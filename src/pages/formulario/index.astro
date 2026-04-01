@@ -1,0 +1,1344 @@
+---
+import Layout from "@/src/layouts/Layout.astro";
+import { supabase, fetchDB } from "@/src/lib/supabase";
+
+import ChevronDown from "@/src/assets/chevron-down.astro";
+import UploadCloud from "@/src/assets/upload-image.astro";
+import AlertTriangle from "@/src/assets/alert-triangle.astro";
+import Sparkles from "@/src/assets/sparkles.astro";
+
+import AiChatFloat from "@/src/components/chats/ai-chat-float.astro";
+import ModalDuplicacion from "@/src/components/modales/modal-duplicacion.astro";
+import ModalExito from "@/src/components/modales/modal-exito.astro";
+
+// login ssr
+const accessToken = Astro.cookies.get("sb-access-token")?.value;
+const refreshToken = Astro.cookies.get("sb-refresh-token")?.value;
+
+let user = null;
+let isAuthorized = false;
+
+if (accessToken && refreshToken) {
+    try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+        });
+        
+        if (!sessionError && sessionData.user) {
+            user = sessionData.user;
+            // Verificamos el rol si es necesario (puedes ajustar el nombre del rol según tu DB)
+            // Por ahora permitimos si tiene sesión, pero marcamos el error si no tiene el rol 'admin'
+            // (Si aún no tienes roles, este check se puede omitir o ajustar)
+            const role = user.app_metadata?.role || user.user_metadata?.role || "user";
+            if (role === "editor") {
+                isAuthorized = true;
+            } else {
+                // El usuario está login pero no tiene rol admin
+                isAuthorized = false;
+            }
+        } else {
+            Astro.cookies.delete("sb-access-token");
+            Astro.cookies.delete("sb-refresh-token");
+        }
+    } catch (error) {
+        console.error("Error al obtener la sesión -> " + error);
+        Astro.cookies.delete("sb-access-token");
+        Astro.cookies.delete("sb-refresh-token");
+    }
+}
+
+// Si está autorizado pedimos el resto de datos, si no, no es necesario cargar toda la DB
+let categorias: { id_tipo_producto: number; nombre_tipo_producto: string }[] = [];
+let generos: { id_genero: number; nombre_genero: string }[] = [];
+let proveedores: { id_proveedor: number; nombre_proveedor: string }[] = [];
+
+if (isAuthorized) {
+    categorias = (await fetchDB({
+        table: "tipo_producto",
+        columns: "id_tipo_producto, nombre_tipo_producto",
+    })) as { id_tipo_producto: number; nombre_tipo_producto: string }[];
+
+    generos = (await fetchDB({
+        table: "genero_producto",
+        columns: "id_genero, nombre_genero",
+    })) as { id_genero: number; nombre_genero: string }[];
+
+    proveedores = (await fetchDB({
+        table: "proveedor",
+        columns: "id_proveedor, nombre_proveedor",
+    })) as { id_proveedor: number; nombre_proveedor: string }[];
+}
+console.log(user)
+---
+
+<Layout>
+    <div class="flex flex-col gap-6">
+        {
+            !isAuthorized ? (
+                <section class="max-w-2xl mx-auto w-full py-12 px-6">
+                    <div class="rounded-3xl border-2 border-border p-8 md:p-12 text-center shadow-xl backdrop-blur-md bg-white/50 relative overflow-hidden group">
+                        <div class="absolute -top-12 -right-12 w-64 h-64 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-all duration-700"></div>
+                        <div class="absolute -bottom-12 -left-12 w-64 h-64 bg-accent/5 rounded-full blur-3xl group-hover:bg-accent/10 transition-all duration-700"></div>
+                        
+                        <article class="relative z-10">
+                            <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-6 text-red-600 shadow-inner">
+                                <AlertTriangle class="w-8 h-8" />
+                            </div>
+                            
+                            <h2 class="text-2xl md:text-3xl font-black text-primary mb-4 tracking-tight">
+                                {user ? "Permisos Insuficientes" : "Acceso Restringido"}
+                            </h2>
+                            
+                            <p class="text-secondary font-medium mb-8 max-w-sm mx-auto leading-relaxed">
+                                {
+                                    user 
+                                    ? "Tu cuenta actual no tiene permisos de administrador para gestionar productos."
+                                    : "Lo sentimos, esta sección es exclusiva para administradores. Inicia sesión para continuar."
+                                }
+                            </p>
+                            
+                            <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+                                {
+                                    user ? (
+                                        <button 
+                                            onclick="document.getElementById('header-logout-trigger')?.click()"
+                                            class="w-full sm:w-auto px-8 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-all shadow-md hover:shadow-lg active:scale-95"
+                                        >
+                                            Cerrar Sesión
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onclick="document.getElementById('header-login-trigger')?.click()"
+                                            class="w-full sm:w-auto px-8 py-3 bg-primary text-white font-bold rounded-xl hover:bg-accent transition-all shadow-md hover:shadow-lg active:scale-95"
+                                        >
+                                            Iniciar Sesión
+                                        </button>
+                                    )
+                                }
+                                <a 
+                                    href="/" 
+                                    class="w-full sm:w-auto px-8 py-3 bg-white text-text font-bold rounded-xl border-2 border-border hover:border-primary transition-all active:scale-95"
+                                >
+                                    Ir al Catálogo
+                                </a>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+            ) : (
+                <form id="form">
+            <div
+                class="relative bg-surface rounded-2xl shadow-lg border-2 border-border p-6 overflow-hidden"
+            >
+                {/* <!-- Barra de carga sutil --> */}
+                <div
+                    id="loading-bar"
+                    class="absolute top-0 left-0 right-0 h-1 bg-primary/10 overflow-hidden hidden"
+                >
+                    <div
+                        class="absolute inset-0 bg-primary animate-progress-bar"
+                    >
+                    </div>
+                </div>
+
+                <h2 class="text-xl font-bold text-primary text-center mb-5">
+                    Agregar Nuevo Producto
+                </h2>
+
+                {/* <!-- Layout principal: izquierda campos, derecha imágenes --> */}
+                <div class="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
+                    {/* <!-- Columna izquierda: todos los campos --> */}
+                    <div class="flex flex-col gap-4">
+                        {/* <!-- Fila 1: Nombre y Precio --> */}
+                        <section class="grid grid-cols-2 gap-4">
+                            <article class="flex flex-col gap-1">
+                                <label
+                                    for="nombre"
+                                    class="text-sm font-medium text-text"
+                                    >Nombre</label>
+                                <input
+                                    type="text"
+                                    id="nombre"
+                                    name="nombre"
+                                    placeholder="Nombre del producto"
+                                    class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                                />
+                                <div id="nombre-error" class="min-h-6"></div>
+                            </article>
+
+                            <article class="flex flex-col gap-1">
+                                <label
+                                    for="precio"
+                                    class="text-sm font-medium text-text"
+                                    >Precio</label>
+                                <input
+                                    type="text"
+                                    id="precio"
+                                    name="precio"
+                                    placeholder="10.000"
+                                    class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                                />
+                                <div id="precio-error" class="min-h-6"></div>
+                            </article>
+                        </section>
+
+                        {/* <!-- Fila 2: Descripción (ancho completo) --> */}
+                        <article class="flex flex-col gap-1">
+                            <div class="flex items-center justify-between">
+                                <label
+                                    for="descripcion"
+                                    class="text-sm font-medium text-text"
+                                    >Descripcion</label>
+                                <span
+                                    id="char-counter"
+                                    class="text-[10px] text-text-muted font-medium bg-gray-100 px-1.5 py-0.5 rounded-full"
+                                    >0/200</span>
+                            </div>
+                            <textarea
+                                id="descripcion"
+                                name="descripcion"
+                                placeholder="Descripcion del producto"
+                                rows="3"
+                                class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all resize-none text-sm"
+                                maxlength="200"></textarea>
+                            <div id="descripcion-error" class="min-h-6"></div>
+                        </article>
+
+                        {/* <!-- Fila 3: Categoría, Género y Proveedor en 3 columnas --> */}
+                        <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            {/* <!-- Género --> */}
+                            <article
+                                class="flex flex-col gap-1"
+                                id="genero-container"
+                            >
+                                <label
+                                    for="genero"
+                                    class="text-sm font-medium text-text"
+                                    >Genero</label>
+                                <div
+                                    id="genero-select-wrapper"
+                                    class="relative"
+                                >
+                                    <select
+                                        id="genero"
+                                        name="genero"
+                                        class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all appearance-none pr-8 text-sm"
+                                    >
+                                        <option value="">Seleccionar</option>
+                                        {
+                                            generos?.map((genero) => (
+                                                <option
+                                                    value={genero.id_genero}
+                                                >
+                                                    {genero.nombre_genero}
+                                                </option>
+                                            ))
+                                        }
+                                    </select>
+                                    <div
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
+                                    >
+                                        <ChevronDown
+                                            class="w-4 h-4 text-secondary"
+                                        />
+                                    </div>
+                                </div>
+                                <div
+                                    id="genero-error"
+                                    class="min-h-6 order-last"
+                                >
+                                </div>
+                            </article>
+
+                            {/* <!-- Categoría --> */}
+                            <article
+                                class="flex flex-col gap-1"
+                                id="categoria-container"
+                            >
+                                <div class="flex items-center justify-between">
+                                    <label
+                                        for="categoria"
+                                        class="text-sm font-medium text-text"
+                                        >Categoria</label>
+                                    <button
+                                        type="button"
+                                        id="categoria-nueva-btn"
+                                        class="text-[9px] bg-primary/10 text-primary hover:bg-primary hover:text-white px-2.5 py-0.5 rounded-full font-bold transition-all uppercase tracking-wider flex items-center gap-1"
+                                    >
+                                        Agregar
+                                    </button>
+                                </div>
+                                <div
+                                    id="categoria-select-wrapper"
+                                    class="relative"
+                                >
+                                    <select
+                                        id="categoria"
+                                        name="categoria"
+                                        class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all appearance-none pr-8 text-sm"
+                                    >
+                                        <option value="">Seleccionar</option>
+                                        {
+                                            categorias?.map((categoria) => (
+                                                <option
+                                                    value={
+                                                        categoria.id_tipo_producto
+                                                    }
+                                                >
+                                                    {
+                                                        categoria.nombre_tipo_producto
+                                                    }
+                                                </option>
+                                            ))
+                                        }
+                                    </select>
+                                    <div
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
+                                    >
+                                        <ChevronDown
+                                            class="w-4 h-4 text-secondary"
+                                        />
+                                    </div>
+                                </div>
+                                <div
+                                    id="categoria-input-wrapper"
+                                    class="hidden"
+                                >
+                                    <div class="flex gap-1.5 items-center">
+                                        <input
+                                            type="text"
+                                            id="categoria-input"
+                                            placeholder="Nueva categoria"
+                                            class="flex-1 min-w-0 px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                                        />
+                                        <div
+                                            id="categoria-spinner"
+                                            class="hidden w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin shrink-0"
+                                        >
+                                        </div>
+                                        <button
+                                            type="button"
+                                            id="categoria-aceptar"
+                                            class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors text-sm shrink-0"
+                                            >✓</button>
+                                        <button
+                                            type="button"
+                                            id="categoria-cancelar"
+                                            class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-medium transition-colors text-sm shrink-0"
+                                            >✕</button>
+                                    </div>
+                                </div>
+                                <div
+                                    id="categoria-error"
+                                    class="min-h-6 order-last"
+                                >
+                                </div>
+                            </article>
+
+                            {/* <!-- Proveedor --> */}
+                            <article
+                                class="flex flex-col gap-1"
+                                id="proveedor-container"
+                            >
+                                <div class="flex items-center justify-between">
+                                    <label
+                                        for="proveedor"
+                                        class="text-sm font-medium text-text"
+                                        >Proveedor</label>
+                                    <button
+                                        type="button"
+                                        id="proveedor-nueva-btn"
+                                        class="text-[9px] bg-primary/10 text-primary hover:bg-primary hover:text-white px-2.5 py-0.5 rounded-full font-bold transition-all uppercase tracking-wider flex items-center gap-1"
+                                    >
+                                        Agregar
+                                    </button>
+                                </div>
+                                <div
+                                    id="proveedor-select-wrapper"
+                                    class="relative"
+                                >
+                                    <select
+                                        id="proveedor"
+                                        name="proveedor"
+                                        class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all appearance-none pr-8 text-sm"
+                                    >
+                                        <option value="">Seleccionar</option>
+                                        {
+                                            proveedores?.map((proveedor) => (
+                                                <option
+                                                    value={
+                                                        proveedor.id_proveedor
+                                                    }
+                                                >
+                                                    {proveedor.nombre_proveedor}
+                                                </option>
+                                            ))
+                                        }
+                                    </select>
+                                    <div
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
+                                    >
+                                        <ChevronDown
+                                            class="w-4 h-4 text-secondary"
+                                        />
+                                    </div>
+                                </div>
+                                <div
+                                    id="proveedor-input-wrapper"
+                                    class="hidden"
+                                >
+                                    <div class="flex gap-1.5 items-center">
+                                        <input
+                                            type="text"
+                                            id="proveedor-input"
+                                            placeholder="Nuevo proveedor"
+                                            class="flex-1 min-w-0 px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                                        />
+                                        <div
+                                            id="proveedor-spinner"
+                                            class="hidden w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin shrink-0"
+                                        >
+                                        </div>
+                                        <button
+                                            type="button"
+                                            id="proveedor-aceptar"
+                                            class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors text-sm shrink-0"
+                                            >✓</button>
+                                        <button
+                                            type="button"
+                                            id="proveedor-cancelar"
+                                            class="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-medium transition-colors text-sm shrink-0"
+                                            >✕</button>
+                                    </div>
+                                </div>
+                                <div
+                                    id="proveedor-error"
+                                    class="min-h-6 order-last"
+                                >
+                                </div>
+                            </article>
+                        </section>
+                    </div>
+
+                    {/* <!-- Columna derecha: Imágenes --> */}
+                    <section class="flex flex-col h-full">
+                        <div class="flex items-center justify-between mb-1">
+                            <span
+                                class="text-xs font-semibold text-text-muted uppercase tracking-wider"
+                                >Imágenes</span>
+                            <span
+                                id="image-counter"
+                                class="text-xs text-text-muted bg-gray-100 px-2 py-0.5 rounded-full"
+                                >0/5</span>
+                        </div>
+
+                        <div
+                            id="image-drop-zone"
+                            class="relative flex-1 border-2 border-dashed border-border rounded-xl p-4 flex flex-col items-center justify-center bg-white hover:border-primary transition-colors cursor-pointer"
+                        >
+                            <div
+                                id="upload-prompt"
+                                class="flex flex-col items-center text-center"
+                            >
+                                <UploadCloud
+                                    class="w-8 h-8 text-secondary mb-2"
+                                />
+                                <span class="text-secondary text-xs font-medium"
+                                    >Clic o arrastra aqui</span>
+                                <span class="text-xs text-text-muted mt-1"
+                                    >PNG, JPG, WebP · 5MB · max 5</span>
+                            </div>
+                            <div id="limit-message" class="hidden text-center">
+                                <AlertTriangle
+                                    class="w-8 h-8 text-amber-500 mx-auto mb-2"
+                                />
+                                <span class="text-amber-600 text-xs font-medium"
+                                    >Limite alcanzado</span>
+                            </div>
+                        </div>
+
+                        <div id="image-messages" class="space-y-1 min-h-6 mt-1">
+                        </div>
+                        <div
+                            id="image-preview"
+                            class="grid grid-cols-5 gap-1.5"
+                        >
+                        </div>
+                        <input
+                            type="file"
+                            id="image-input"
+                            name="imagenes"
+                            accept="image/jpeg,image/png,image/webp"
+                            multiple
+                            class="hidden"
+                        />
+                    </section>
+                </div>
+
+                <button
+                    type="submit"
+                    id="submit-btn"
+                    class="w-full mt-5 bg-primary hover:bg-accent text-white font-semibold py-2.5 px-6 rounded-lg transition-all duration-300 hover:shadow-lg text-sm disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                    <span id="submit-text">Agregar Producto</span>
+                    <div
+                        id="submit-spinner"
+                        class="hidden w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
+                    >
+                    </div>
+                </button>
+            </div>
+        </form>
+
+        <AiChatFloat />
+        )
+    }
+    </div>
+</Layout>
+
+<style>
+    @keyframes progress-bar {
+        0% {
+            transform: translateX(-100%);
+        }
+        100% {
+            transform: translateX(100%);
+        }
+    }
+    .animate-progress-bar {
+        animation: progress-bar 1.5s infinite linear;
+        width: 100%;
+    }
+</style>
+
+<!-- Modal de duplicacion -->
+<ModalDuplicacion />
+
+<!-- Modal para éxito -->
+<ModalExito />
+
+<script>
+    import { actions } from "astro:actions";
+
+    const MAX_IMAGES = 5;
+    const MAX_SIZE_MB = 5;
+    const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+    let imageFiles: File[] = [];
+    let blobUrls: string[] = [];
+
+    const dropZone = document.getElementById(
+        "image-drop-zone",
+    ) as HTMLDivElement;
+    const fileInput = document.getElementById(
+        "image-input",
+    ) as HTMLInputElement;
+    const previewContainer = document.getElementById(
+        "image-preview",
+    ) as HTMLDivElement;
+    const uploadPrompt = document.getElementById(
+        "upload-prompt",
+    ) as HTMLDivElement;
+    const limitMessage = document.getElementById(
+        "limit-message",
+    ) as HTMLDivElement;
+    const counter = document.getElementById("image-counter") as HTMLSpanElement;
+    const messagesContainer = document.getElementById(
+        "image-messages",
+    ) as HTMLDivElement;
+
+    // Elementos del modal de duplicados
+    const duplicateModal = document.getElementById(
+        "duplicate-modal",
+    ) as HTMLDivElement;
+    const duplicateMessage = document.getElementById(
+        "duplicate-message",
+    ) as HTMLParagraphElement;
+    const duplicateImagesPreview = document.getElementById(
+        "duplicate-images-preview",
+    ) as HTMLDivElement;
+    const closeDuplicateModal = document.getElementById(
+        "close-duplicate-modal",
+    ) as HTMLButtonElement;
+
+    // Elementos de carga y éxito
+    const loadingBar = document.getElementById("loading-bar") as HTMLDivElement;
+    const successModal = document.getElementById(
+        "success-modal",
+    ) as HTMLDivElement;
+    const closeSuccessModal = document.getElementById(
+        "close-success-modal",
+    ) as HTMLButtonElement;
+    const closeSuccessModalX = document.getElementById(
+        "close-success-modal-x",
+    ) as HTMLButtonElement;
+    const closeDuplicateModalX = document.getElementById(
+        "close-duplicate-modal-x",
+    ) as HTMLButtonElement;
+    const submitBtn = document.getElementById(
+        "submit-btn",
+    ) as HTMLButtonElement;
+    const submitText = document.getElementById(
+        "submit-text",
+    ) as HTMLSpanElement;
+    const submitSpinner = document.getElementById(
+        "submit-spinner",
+    ) as HTMLDivElement;
+
+    // Contenedores de error por campo
+    const nombreError = document.getElementById(
+        "nombre-error",
+    ) as HTMLDivElement;
+    const precioError = document.getElementById(
+        "precio-error",
+    ) as HTMLDivElement;
+    const generoError = document.getElementById(
+        "genero-error",
+    ) as HTMLDivElement;
+    const categoriaError = document.getElementById(
+        "categoria-error",
+    ) as HTMLDivElement;
+    const proveedorError = document.getElementById(
+        "proveedor-error",
+    ) as HTMLDivElement;
+    const descripcionError = document.getElementById(
+        "descripcion-error",
+    ) as HTMLDivElement;
+    const charCounter = document.getElementById(
+        "char-counter",
+    ) as HTMLSpanElement;
+    const descriptionTextarea = document.getElementById(
+        "descripcion",
+    ) as HTMLTextAreaElement;
+    const precioInput = document.getElementById("precio") as HTMLInputElement;
+
+    precioInput?.addEventListener("input", (e) => {
+        const input = e.target as HTMLInputElement;
+        let value = input.value.replace(/[^\d]/g, "");
+        if (value) {
+            value = parseInt(value, 10).toLocaleString("es-CO");
+        }
+        input.value = value;
+    });
+
+    const activeMessages = new Map<
+        HTMLElement,
+        ReturnType<typeof setTimeout>
+    >();
+
+    const hideDuplicateModal = () => {
+        duplicateModal.classList.add("hidden");
+        duplicateModal.classList.remove("flex");
+        document.body.style.overflow = "auto";
+    };
+
+    closeDuplicateModal?.addEventListener("click", hideDuplicateModal);
+    closeDuplicateModalX?.addEventListener("click", hideDuplicateModal);
+
+    const hideSuccessModal = () => {
+        successModal.classList.add("hidden");
+        successModal.classList.remove("flex");
+        document.body.style.overflow = "auto";
+        // Opcional: limpiar el formulario aquí si se desea
+        form.reset();
+        imageFiles = [];
+        renderPreviews();
+        updateUI();
+        charCounter.textContent = "0/200";
+        charCounter.classList.add("bg-gray-100", "text-text-muted");
+        charCounter.classList.remove("bg-red-100", "text-red-600");
+
+        // Reset button state
+        submitBtn.disabled = false;
+        submitText.textContent = "Agregar Producto";
+    };
+
+    closeSuccessModal?.addEventListener("click", hideSuccessModal);
+    closeSuccessModalX?.addEventListener("click", hideSuccessModal);
+
+    function showMessage(
+        text: string,
+        type: "error" | "warning",
+        container: HTMLElement = messagesContainer,
+    ) {
+        if (activeMessages.has(container)) {
+            clearTimeout(activeMessages.get(container));
+        }
+        container.innerHTML = "";
+
+        const input = container.previousElementSibling as
+            | HTMLInputElement
+            | HTMLSelectElement
+            | HTMLTextAreaElement;
+        if (
+            input &&
+            (input.tagName === "INPUT" ||
+                input.tagName === "SELECT" ||
+                input.tagName === "TEXTAREA")
+        ) {
+            input.classList.add(
+                type === "error" ? "!border-red-500" : "!border-amber-500",
+            );
+            input.classList.remove("border-border", "focus:ring-primary");
+        }
+
+        const div = document.createElement("div");
+        div.className = `flex items-center gap-1.5 px-2 py-1 rounded text-[11px] leading-tight ${type === "error" ? "text-red-600" : "text-amber-600"}`;
+        div.innerHTML = `
+            <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${type === "error" ? "M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" : "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"}"></path>
+            </svg>
+            <span class="truncate">${text}</span>
+        `;
+
+        container.appendChild(div);
+
+        const timeout = setTimeout(() => {
+            div.style.opacity = "0";
+            div.style.transition = "opacity 0.3s";
+            setTimeout(() => {
+                div.remove();
+                activeMessages.delete(container);
+                if (
+                    input &&
+                    (input.tagName === "INPUT" ||
+                        input.tagName === "SELECT" ||
+                        input.tagName === "TEXTAREA")
+                ) {
+                    input.classList.remove(
+                        "!border-red-500",
+                        "!border-amber-500",
+                    );
+                    input.classList.add("border-border", "focus:ring-primary");
+                }
+            }, 300);
+        }, 4000);
+        activeMessages.set(container, timeout);
+    }
+
+    function dismissMessage(container: HTMLElement = messagesContainer) {
+        if (activeMessages.has(container)) {
+            clearTimeout(activeMessages.get(container));
+            activeMessages.delete(container);
+        }
+        const input = container.previousElementSibling as
+            | HTMLInputElement
+            | HTMLSelectElement
+            | HTMLTextAreaElement;
+        if (
+            input &&
+            (input.tagName === "INPUT" ||
+                input.tagName === "SELECT" ||
+                input.tagName === "TEXTAREA")
+        ) {
+            input.classList.remove("!border-red-500", "!border-amber-500");
+            input.classList.add("border-border", "focus:ring-primary");
+        }
+        container.innerHTML = "";
+    }
+
+    function updateUI() {
+        counter.textContent = `${imageFiles.length}/${MAX_IMAGES}`;
+
+        if (imageFiles.length >= MAX_IMAGES) {
+            uploadPrompt.classList.add("hidden");
+            limitMessage.classList.remove("hidden");
+            dropZone.classList.remove("hover:border-primary");
+            dropZone.classList.add("border-amber-400", "bg-amber-50");
+            fileInput.disabled = true;
+        } else {
+            uploadPrompt.classList.remove("hidden");
+            limitMessage.classList.add("hidden");
+            dropZone.classList.add("hover:border-primary");
+            dropZone.classList.remove("border-amber-400", "bg-amber-50");
+            fileInput.disabled = false;
+        }
+    }
+
+    function renderPreviews() {
+        blobUrls.forEach((url) => URL.revokeObjectURL(url));
+        blobUrls = [];
+        previewContainer.innerHTML = "";
+
+        imageFiles.forEach((file, index) => {
+            const blobUrl = URL.createObjectURL(file);
+            blobUrls.push(blobUrl);
+
+            const div = document.createElement("div");
+            div.className =
+                "relative group aspect-square rounded-lg overflow-hidden border border-border bg-gray-100";
+
+            const img = document.createElement("img");
+            img.src = blobUrl;
+            img.className = "w-full h-full object-cover";
+            img.onerror = () => {
+                URL.revokeObjectURL(blobUrl);
+                blobUrls = blobUrls.filter((url) => url !== blobUrl);
+                imageFiles.splice(index, 1);
+                showMessage(
+                    `La imagen "${file.name}" esta dañada o no se puede leer`,
+                    "error",
+                );
+                renderPreviews();
+                updateUI();
+            };
+
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className =
+                "absolute top-1 right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity";
+            btn.innerHTML = `<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                URL.revokeObjectURL(blobUrl);
+                blobUrls = blobUrls.filter((url) => url !== blobUrl);
+                imageFiles.splice(index, 1);
+                renderPreviews();
+                updateUI();
+            };
+
+            const badge = document.createElement("span");
+            badge.className =
+                "absolute bottom-1 left-1 bg-primary/80 text-white text-[10px] px-1.5 py-0.5 rounded";
+            badge.textContent = `${index + 1}`;
+
+            div.appendChild(img);
+            div.appendChild(btn);
+            div.appendChild(badge);
+            previewContainer.appendChild(div);
+        });
+    }
+
+    function addImages(files: FileList | null) {
+        if (!files) return;
+        dismissMessage(messagesContainer);
+
+        Array.from(files).forEach((file) => {
+            if (imageFiles.length >= MAX_IMAGES) return;
+
+            if (!ALLOWED_TYPES.includes(file.type)) {
+                showMessage(
+                    `"${file.name}" no es un formato valido (usa JPG, PNG o WebP)`,
+                    "error",
+                );
+                return;
+            }
+
+            if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+                showMessage(
+                    `"${file.name}" supera los ${MAX_SIZE_MB}MB`,
+                    "error",
+                );
+                return;
+            }
+
+            const exists = imageFiles.some(
+                (f) => f.name === file.name && f.size === file.size,
+            );
+            if (exists) {
+                showMessage(`"${file.name}" ya fue agregada`, "warning");
+                return;
+            }
+
+            imageFiles.push(file);
+        });
+
+        renderPreviews();
+        updateUI();
+    }
+
+    dropZone.addEventListener("click", () => {
+        if (imageFiles.length < MAX_IMAGES) {
+            fileInput.click();
+        }
+    });
+
+    dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        if (imageFiles.length < MAX_IMAGES) {
+            dropZone.classList.add("border-primary", "bg-primary/5");
+        }
+    });
+
+    dropZone.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("border-primary", "bg-primary/5");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("border-primary", "bg-primary/5");
+        addImages(e.dataTransfer?.files || null);
+    });
+
+    fileInput.addEventListener("change", () => addImages(fileInput.files));
+
+    updateUI();
+
+    (function initCategoriaNueva() {
+        const container = document.getElementById(
+            "categoria-container",
+        ) as HTMLDivElement;
+        const select = document.getElementById(
+            "categoria",
+        ) as HTMLSelectElement;
+        const selectWrapper = document.getElementById(
+            "categoria-select-wrapper",
+        ) as HTMLDivElement;
+        const inputWrapper = document.getElementById(
+            "categoria-input-wrapper",
+        ) as HTMLDivElement;
+        const nuevaBtn = document.getElementById(
+            "categoria-nueva-btn",
+        ) as HTMLButtonElement;
+        const input = document.getElementById(
+            "categoria-input",
+        ) as HTMLInputElement;
+        const aceptarBtn = document.getElementById(
+            "categoria-aceptar",
+        ) as HTMLButtonElement;
+        const cancelarBtn = document.getElementById(
+            "categoria-cancelar",
+        ) as HTMLButtonElement;
+        const spinner = document.getElementById(
+            "categoria-spinner",
+        ) as HTMLDivElement;
+
+        let isSubmitting = false;
+
+        const handleOutsideClick = (e: MouseEvent) => {
+            if (isSubmitting) return;
+            if (!container.contains(e.target as Node)) {
+                cancelarBtn.click();
+            }
+        };
+
+        nuevaBtn.addEventListener("click", () => {
+            selectWrapper.classList.add("hidden");
+            inputWrapper.classList.remove("hidden");
+            nuevaBtn.classList.add("hidden");
+            input.focus();
+            document.addEventListener("mousedown", handleOutsideClick);
+        });
+
+        aceptarBtn.addEventListener("click", async () => {
+            const nuevaCategoria = input.value.trim();
+            if (nuevaCategoria) {
+                isSubmitting = true;
+                input.disabled = true;
+                aceptarBtn.disabled = true;
+                aceptarBtn.classList.add("hidden");
+                spinner.classList.remove("hidden");
+
+                const { data, error } = await actions.addCategory({
+                    nombre: nuevaCategoria,
+                });
+
+                // Si se canceló mientras cargaba (aunqueisSubmitting previene esto parcialmente)
+                // el estado se reseteará en cancelarBtn.click()
+
+                if (!isSubmitting) return; // Ya se canceló
+
+                if (error) {
+                    console.error("Error al agregar categoria:", error);
+                    isSubmitting = false;
+                    input.disabled = false;
+                    aceptarBtn.disabled = false;
+                    aceptarBtn.classList.remove("hidden");
+                    spinner.classList.add("hidden");
+                    return;
+                }
+
+                if (data) {
+                    const option = document.createElement("option");
+                    option.value = data.id_tipo_producto.toString();
+                    option.textContent = data.nombre_tipo_producto;
+                    select.appendChild(option);
+                    select.value = data.id_tipo_producto.toString();
+                }
+            }
+            resetState();
+        });
+
+        function resetState() {
+            isSubmitting = false;
+            input.value = "";
+            input.disabled = false;
+            aceptarBtn.disabled = false;
+            aceptarBtn.classList.remove("hidden");
+            spinner.classList.add("hidden");
+            inputWrapper.classList.add("hidden");
+            selectWrapper.classList.remove("hidden");
+            nuevaBtn.classList.remove("hidden");
+            document.removeEventListener("mousedown", handleOutsideClick);
+        }
+
+        cancelarBtn.addEventListener("click", () => {
+            resetState();
+        });
+
+        input.addEventListener("keydown", (e) => {
+            if (isSubmitting) return;
+            if (e.key === "Enter") {
+                e.preventDefault();
+                aceptarBtn.click();
+            } else if (e.key === "Escape") {
+                cancelarBtn.click();
+            }
+        });
+    })();
+
+    (function initProveedorNuevo() {
+        const container = document.getElementById(
+            "proveedor-container",
+        ) as HTMLDivElement;
+        const select = document.getElementById(
+            "proveedor",
+        ) as HTMLSelectElement;
+        const selectWrapper = document.getElementById(
+            "proveedor-select-wrapper",
+        ) as HTMLDivElement;
+        const inputWrapper = document.getElementById(
+            "proveedor-input-wrapper",
+        ) as HTMLDivElement;
+        const nuevaBtn = document.getElementById(
+            "proveedor-nueva-btn",
+        ) as HTMLButtonElement;
+        const input = document.getElementById(
+            "proveedor-input",
+        ) as HTMLInputElement;
+        const aceptarBtn = document.getElementById(
+            "proveedor-aceptar",
+        ) as HTMLButtonElement;
+        const cancelarBtn = document.getElementById(
+            "proveedor-cancelar",
+        ) as HTMLButtonElement;
+        const spinner = document.getElementById(
+            "proveedor-spinner",
+        ) as HTMLDivElement;
+
+        let isSubmitting = false;
+
+        const handleOutsideClick = (e: MouseEvent) => {
+            if (isSubmitting) return;
+            if (!container.contains(e.target as Node)) {
+                cancelarBtn.click();
+            }
+        };
+
+        nuevaBtn.addEventListener("click", () => {
+            selectWrapper.classList.add("hidden");
+            inputWrapper.classList.remove("hidden");
+            nuevaBtn.classList.add("hidden");
+            input.focus();
+            document.addEventListener("mousedown", handleOutsideClick);
+        });
+
+        aceptarBtn.addEventListener("click", async () => {
+            const nuevoProveedor = input.value.trim();
+            if (nuevoProveedor) {
+                isSubmitting = true;
+                input.disabled = true;
+                aceptarBtn.disabled = true;
+                aceptarBtn.classList.add("hidden");
+                spinner.classList.remove("hidden");
+
+                const { data, error } = await actions.addSupplier({
+                    nombre: nuevoProveedor,
+                });
+
+                if (!isSubmitting) return;
+
+                if (error) {
+                    console.error("Error al agregar proveedor:", error);
+                    isSubmitting = false;
+                    input.disabled = false;
+                    aceptarBtn.disabled = false;
+                    aceptarBtn.classList.remove("hidden");
+                    spinner.classList.add("hidden");
+                    return;
+                }
+
+                if (data) {
+                    const option = document.createElement("option");
+                    option.value = data.id_proveedor.toString();
+                    option.textContent = data.nombre_proveedor;
+                    select.appendChild(option);
+                    select.value = data.id_proveedor.toString();
+                }
+            }
+            resetState();
+        });
+
+        function resetState() {
+            isSubmitting = false;
+            input.value = "";
+            input.disabled = false;
+            aceptarBtn.disabled = false;
+            aceptarBtn.classList.remove("hidden");
+            spinner.classList.add("hidden");
+            inputWrapper.classList.add("hidden");
+            selectWrapper.classList.remove("hidden");
+            nuevaBtn.classList.remove("hidden");
+            document.removeEventListener("mousedown", handleOutsideClick);
+        }
+
+        cancelarBtn.addEventListener("click", () => {
+            resetState();
+        });
+
+        input.addEventListener("keydown", (e) => {
+            if (isSubmitting) return;
+            if (e.key === "Enter") {
+                e.preventDefault();
+                aceptarBtn.click();
+            } else if (e.key === "Escape") {
+                cancelarBtn.click();
+            }
+        });
+    })();
+
+    descriptionTextarea?.addEventListener("input", () => {
+        const currentLength = descriptionTextarea.value.length;
+        charCounter.textContent = `${currentLength}/200`;
+        if (currentLength >= 200) {
+            charCounter.classList.remove("bg-gray-100", "text-text-muted");
+            charCounter.classList.add("bg-red-100", "text-red-600");
+        } else {
+            charCounter.classList.add("bg-gray-100", "text-text-muted");
+            charCounter.classList.remove("bg-red-100", "text-red-600");
+        }
+    });
+
+    const form = document.getElementById("form") as HTMLFormElement;
+
+    form?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const nombre = formData.get("nombre") as string;
+        const precio = (formData.get("precio") as string).replace(/\./g, "");
+        const genero = formData.get("genero") as string;
+        const categoria = formData.get("categoria") as string;
+        const categoriaNombre = document.getElementById(
+            "categoria",
+        ) as HTMLSelectElement;
+        const proveedor = formData.get("proveedor") as string;
+        const proveedorNombre = document.getElementById(
+            "proveedor",
+        ) as HTMLSelectElement;
+        const descripcion = formData.get("descripcion") as string;
+
+        // Limpiar errores previos
+        dismissMessage(nombreError);
+        dismissMessage(precioError);
+        dismissMessage(generoError);
+        dismissMessage(categoriaError);
+        dismissMessage(proveedorError);
+        dismissMessage(descripcionError);
+        dismissMessage(messagesContainer);
+
+        let hasError = false;
+
+        if (!nombre.trim()) {
+            showMessage("El nombre es obligatorio", "error", nombreError);
+            hasError = true;
+        }
+        if (!descripcion.trim()) {
+            showMessage(
+                "La descripción es obligatoria",
+                "error",
+                descripcionError,
+            );
+            hasError = true;
+        } else if (descripcion.length > 200) {
+            showMessage(
+                "La descripción no puede superar los 200 caracteres",
+                "error",
+                descripcionError,
+            );
+            hasError = true;
+        }
+        if (!precio.trim()) {
+            showMessage("El precio es obligatorio", "error", precioError);
+            hasError = true;
+        }
+        if (!genero) {
+            showMessage("Selecciona un género", "error", generoError);
+            hasError = true;
+        }
+        if (!categoria) {
+            showMessage("Selecciona una categoría", "error", categoriaError);
+            hasError = true;
+        }
+        if (!proveedor) {
+            showMessage("Selecciona un proveedor", "error", proveedorError);
+            hasError = true;
+        }
+        if (imageFiles.length === 0) {
+            showMessage(
+                "Debes agregar al menos una imagen",
+                "error",
+                messagesContainer,
+            );
+            hasError = true;
+        }
+
+        if (hasError) return;
+
+        // Iniciar estado de carga
+        loadingBar.classList.remove("hidden");
+        submitBtn.disabled = true;
+        submitText.textContent = "Guardando...";
+        submitSpinner.classList.remove("hidden");
+
+        try {
+            // Verificar si el producto o descripción ya existen
+            const { data: duplicates, error: checkError } =
+                await actions.checkProductDuplicates({ nombre, descripcion });
+
+            if (checkError) {
+                loadingBar.classList.add("hidden");
+                submitBtn.disabled = false;
+                submitText.textContent = "Agregar Producto";
+                submitSpinner.classList.add("hidden");
+
+                if (
+                    "issues" in checkError &&
+                    Array.isArray(checkError.issues) &&
+                    checkError.issues?.at(0)?.code === "too_small" &&
+                    nombre.length < 4
+                ) {
+                    showMessage(
+                        "El nombre debe tener al menos 4 caracteres",
+                        "error",
+                        nombreError,
+                    );
+                } else if (
+                    "issues" in checkError &&
+                    Array.isArray(checkError.issues) &&
+                    checkError.issues?.at(0)?.code === "too_small" &&
+                    descripcion.length < 4
+                ) {
+                    showMessage(
+                        "La descripción debe tener al menos 4 caracteres",
+                        "error",
+                        descripcionError,
+                    );
+                }
+                return;
+            } else if (
+                duplicates &&
+                (duplicates.nombre || duplicates.descripcion)
+            ) {
+                loadingBar.classList.add("hidden");
+                submitBtn.disabled = false;
+                submitText.textContent = "Agregar Producto";
+                submitSpinner.classList.add("hidden");
+
+                // Mostrar modal de error
+                let message = "";
+                if (duplicates.nombre && duplicates.descripcion) {
+                    message = `El nombre <span class="font-bold text-red-600">"${nombre}"</span> y la descripción ya están en uso.`;
+                } else if (duplicates.nombre) {
+                    message = `El nombre <span class="font-bold text-red-600">"${nombre}"</span> ya está en uso.`;
+                } else {
+                    message = `La descripción ya existe en nuestra base de datos.`;
+                }
+
+                duplicateMessage.innerHTML = message;
+
+                // Limpiar y llenar la galería del modal con las imágenes seleccionadas
+                duplicateImagesPreview.innerHTML = "";
+                imageFiles.forEach((file: File) => {
+                    const url = URL.createObjectURL(file);
+                    const img = document.createElement("img");
+                    img.src = url;
+                    img.className =
+                        "aspect-square w-full object-cover rounded-md border border-border shadow-sm";
+                    duplicateImagesPreview.appendChild(img);
+                });
+
+                duplicateModal.classList.remove("hidden");
+                duplicateModal.classList.add("flex");
+                document.body.style.overflow = "hidden";
+                return;
+            }
+
+            const uploadFormData = new FormData();
+            const nameCategory =
+                categoriaNombre.selectedOptions[0].text.toString();
+            const nameSupplier =
+                proveedorNombre.selectedOptions[0].text.toString();
+
+            imageFiles.forEach((file, index) =>
+                uploadFormData.append(
+                    "images",
+                    file,
+                    `REF-${nameSupplier.at(0)?.toUpperCase()}${nameCategory.at(0)?.toUpperCase()}-${nombre.replaceAll(" ", "-")}-${index + 1}.${file.name.split(".").at(-1)}`,
+                ),
+            );
+            uploadFormData.append("type", nameCategory);
+            uploadFormData.append("supplier", nameSupplier);
+            uploadFormData.append("name", nombre);
+
+            const { data: images, error: productError } =
+                await actions.uploadImages(uploadFormData);
+            if (productError) {
+                loadingBar.classList.add("hidden");
+                submitBtn.disabled = false;
+                submitText.textContent = "Agregar Producto";
+                submitSpinner.classList.add("hidden");
+
+                let message = "Error al subir las imágenes";
+                if (productError.message)
+                    message = `Error al subir las imágenes: ${productError.message}`;
+
+                duplicateMessage.innerHTML = message;
+                duplicateModal.classList.remove("hidden");
+                duplicateModal.classList.add("flex");
+                document.body.style.overflow = "hidden";
+            } else {
+                // enviar a la base de datos
+                const { error: addProductError } = await actions.addProduct({
+                    nombre,
+                    descripcion,
+                    precio,
+                    genero,
+                    categoria,
+                    proveedor,
+                    images: images || [],
+                });
+
+                loadingBar.classList.add("hidden");
+                // Mantenemos el botón desactivado hasta que cierre el modal de éxito
+                // o lo reactivamos si hay error
+
+                if (addProductError) {
+                    submitBtn.disabled = false;
+                    submitText.textContent = "Agregar Producto";
+                    submitSpinner.classList.add("hidden");
+
+                    duplicateMessage.innerHTML = `Error al guardar el producto: ${addProductError.message}`;
+                    duplicateModal.classList.remove("hidden");
+                    duplicateModal.classList.add("flex");
+                    document.body.style.overflow = "hidden";
+                } else {
+                    submitText.textContent = "¡Guardado!";
+                    submitSpinner.classList.add("hidden");
+
+                    // Mostrar modal de éxito
+                    successModal.classList.remove("hidden");
+                    successModal.classList.add("flex");
+                    document.body.style.overflow = "hidden";
+                }
+            }
+        } catch (err) {
+            loadingBar.classList.add("hidden");
+            submitBtn.disabled = false;
+            submitText.textContent = "Agregar Producto";
+            submitSpinner.classList.add("hidden");
+            console.error("Error inesperado:", err);
+        }
+    });
+
+</script>

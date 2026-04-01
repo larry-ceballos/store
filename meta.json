@@ -1,0 +1,24 @@
+{
+    "nombre": "Moncada Store",
+    "version": "1.0.0",
+    "description": "Somos una tienda de ropa para toda la familia. contamos con ropa para hombre, mujer y niños. ademas de accesorios y una traectoria de mas de 10 años en el mercado.",
+    "author": "Larry Moncada",
+    "license": "MIT",
+    "keywords": [
+        "tienda",
+        "ropa",
+        "moncada"
+    ],
+    "OG": {
+        "title": "Moncada Store",
+        "description": "Tienda de ropa",
+        "image": "https://moncadastore.com/og.png",
+        "url": "https://moncadastore.com"
+    },
+    "twitter": {
+        "title": "Moncada Store",
+        "description": "Tienda de ropa",
+        "image": "https://moncadastore.com/og.png",
+        "url": "https://moncadastore.com"
+    }
+}

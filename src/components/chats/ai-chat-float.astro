@@ -1,0 +1,441 @@
+---
+import Sparkles from "@/src/assets/sparkles.astro";
+import IaBooble from "./ia-booble.astro";
+import InputArea from "./input-area.astro";
+---
+
+<div class="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-none">
+    <!-- Main Chat Container -->
+    <div
+        id="ai-chat-container"
+        class="chat-container pointer-events-auto flex flex-col bg-primary rounded-full shadow-lg hover:shadow-xl transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden origin-bottom-right"
+    >
+        <!-- Bubble View (Initial State) -->
+        <button
+            id="ai-chat-bubble-trigger"
+            class="bubble-trigger absolute inset-0 flex items-center justify-center text-white transition-opacity duration-300 z-10"
+            title="Abrir Asistente IA"
+        >
+            <div class="relative w-7 h-7 flex items-center justify-center">
+                <Sparkles class="w-full h-full hover:rotate-12 transition-transform" />
+                <div class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-primary animate-pulse bubble-indicator"></div>
+            </div>
+        </button>
+
+        <!-- Window View (Opened State) -->
+        <div id="ai-chat-window-content" class="flex flex-col flex-1 opacity-0 pointer-events-none transition-opacity duration-500 delay-500 h-full w-full">
+            <header class="bg-primary p-4 flex items-center justify-between text-white shrink-0">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                        <Sparkles class="w-4 h-4" />
+                    </div>
+                    <h2 class="font-bold text-base">Asistente de IA</h2>
+                </div>
+                <button 
+                    id="close-chat-btn"
+                    class="hover:bg-white/10 p-1.5 rounded-lg transition-colors"
+                    title="Cerrar chat"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </header>
+
+            <p class="text-[11px] text-white/80 px-4 py-1.5 bg-primary/95 border-b border-white/10">
+                Describe el producto y lo completaré automáticamente.
+            </p>
+
+            <!-- Chat area -->
+            <div class="flex flex-col flex-1 bg-white overflow-hidden">
+                <section
+                    id="chat-messages"
+                    class="flex-1 p-4 overflow-y-auto flex flex-col gap-4 bg-gray-50/50 scroll-smooth"
+                >
+                    <IaBooble />
+                </section>
+
+                <!-- Image Preview Area -->
+                <div 
+                    id="image-preview-container" 
+                    class="hidden border-t border-border/50 bg-white/80 backdrop-blur-sm p-3 relative"
+                >
+                    <div 
+                        id="image-previews" 
+                        class="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory hide-scrollbar pt-3 pb-3 px-2"
+                    >
+                        <!-- Previews will be injected here -->
+                    </div>
+                    <div id="image-error" class="hidden text-[10px] text-red-500 mt-1 font-medium px-1 animate-in fade-in slide-in-from-top-1"></div>
+                </div>
+
+                <InputArea />
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .chat-container {
+        width: 60px;
+        height: 60px;
+        position: relative;
+        border-radius: 9999px;
+        /* Transicion al cerrar (0.2s exactamente) */
+        transition: 
+            width 0.2s linear,
+            height 0.2s linear,
+            border-radius 0.2s linear,
+            background-color 0.15s linear,
+            box-shadow 0.15s linear;
+    }
+
+    .chat-container.open {
+        width: min(400px, 90vw);
+        height: min(600px, 80vh);
+        border-radius: 24px;
+        background-color: white;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+        /* Transicion al abrir (0.25s exactamente) */
+        transition: 
+            width 0.25s linear,
+            height 0.25s linear,
+            border-radius 0.25s linear,
+            background-color 0.2s linear,
+            box-shadow 0.2s linear;
+    }
+
+    #ai-chat-window-content {
+        /* Al cerrar, el contenido desaparece instantaneamente */
+        transition: opacity 0.1s linear;
+        opacity: 0;
+    }
+
+    .chat-container.open #ai-chat-window-content {
+        /* Al abrir, esperamos a la expansion de 0.25s */
+        transition: opacity 0.2s linear 0.25s;
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .chat-container.open .bubble-trigger {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .bubble-indicator {
+        display: block;
+    }
+
+    .chat-container.open .bubble-indicator {
+        display: none;
+    }
+
+    /* Scroll Snap for Image Previews */
+    #image-previews {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    #image-previews::-webkit-scrollbar {
+        display: none;
+    }
+
+    .preview-item {
+        scroll-snap-align: center;
+        flex: 0 0 auto;
+    }
+
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-2px); }
+        75% { transform: translateX(2px); }
+    }
+
+    .error-shake {
+        animation: shake 0.2s ease-in-out 0s 2;
+    }
+</style>
+
+<script>
+    const container = document.getElementById("ai-chat-container");
+    const bubbleTrigger = document.getElementById("ai-chat-bubble-trigger");
+    const closeChatBtn = document.getElementById("close-chat-btn");
+    const chatInput = document.getElementById("chat-input") as HTMLTextAreaElement;
+    const chatSendBtn = document.getElementById("chat-send-btn") as HTMLButtonElement;
+    const chatMessages = document.getElementById("chat-messages") as HTMLDivElement;
+
+    // Image Upload Elements
+    const uploadBtn = document.getElementById("upload-image-btn");
+    const imageInput = document.getElementById("image-upload-input") as HTMLInputElement;
+    const previewContainer = document.getElementById("image-preview-container");
+    const previewsWrapper = document.getElementById("image-previews");
+    const imageError = document.getElementById("image-error");
+
+    let selectedFiles: File[] = [];
+    const MAX_IMAGES = 5;
+    const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/avif", "image/webp"];
+
+    function toggleChat() {
+        container?.classList.toggle("open");
+    }
+
+    bubbleTrigger?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleChat();
+    });
+
+    closeChatBtn?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleChat();
+    });
+
+    // Cerrar al hacer clic fuera
+    document.addEventListener("click", (e) => {
+        if (!container) return;
+        
+        const isClickInside = container.contains(e.target as Node);
+        const isOpen = container.classList.contains("open");
+
+        if (!isClickInside && isOpen) {
+            container.classList.remove("open");
+        }
+    });
+
+    function autoResizeChatInput() {
+        if (!chatInput) return;
+        chatInput.style.height = "auto";
+        chatInput.style.height = chatInput.scrollHeight + "px";
+    }
+
+    function showError(message: string) {
+        if (!imageError) return;
+        imageError.textContent = message;
+        imageError.classList.remove("hidden");
+        
+        // Shake animation
+        previewContainer?.classList.add("error-shake");
+        setTimeout(() => previewContainer?.classList.remove("error-shake"), 400);
+
+        setTimeout(() => {
+            imageError.classList.add("hidden");
+        }, 3000);
+    }
+
+    function updatePreviews() {
+        if (!previewsWrapper || !previewContainer) return;
+        
+        previewsWrapper.innerHTML = "";
+        
+        if (selectedFiles.length === 0) {
+            previewContainer.classList.add("hidden");
+            return;
+        }
+
+        previewContainer.classList.remove("hidden");
+
+        selectedFiles.forEach((file, index) => {
+            const reader = new FileReader();
+            const previewId = `preview-${index}`;
+            
+            const item = document.createElement("div");
+            item.className = "preview-item relative group w-16 h-16 shrink-0 snap-start";
+            item.id = previewId;
+            item.innerHTML = `
+                <div class="w-full h-full rounded-lg overflow-hidden border border-border bg-gray-100 shadow-sm transition-transform group-hover:scale-105">
+                    <img src="" alt="preview" class="w-full h-full object-cover">
+                </div>
+                <button 
+                    class="remove-img absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10" 
+                    data-index="${index}"
+                    type="button"
+                    title="Eliminar imagen"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            `;
+
+            previewsWrapper.appendChild(item);
+
+            reader.onload = (e) => {
+                const img = item.querySelector("img");
+                if (img && e.target?.result) {
+                    img.src = e.target.result as string;
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Add event listeners to remove buttons
+        previewsWrapper.querySelectorAll(".remove-img").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation(); // Prevenir que el click cierre el chat
+                const index = parseInt((e.currentTarget as HTMLElement).dataset.index || "0");
+                removeImage(index);
+            });
+        });
+    }
+
+    function removeImage(index: number) {
+        selectedFiles.splice(index, 1);
+        updatePreviews();
+        checkUploadButtonState();
+    }
+
+    function checkUploadButtonState() {
+        if (!uploadBtn) return;
+        if (selectedFiles.length >= MAX_IMAGES) {
+            uploadBtn.classList.add("opacity-50", "cursor-not-allowed");
+            (uploadBtn as HTMLButtonElement).disabled = true;
+        } else {
+            uploadBtn.classList.remove("opacity-50", "cursor-not-allowed");
+            (uploadBtn as HTMLButtonElement).disabled = false;
+        }
+    }
+
+    uploadBtn?.addEventListener("click", () => {
+        if (selectedFiles.length >= MAX_IMAGES) {
+            showError(`Máximo ${MAX_IMAGES} imágenes permitidas.`);
+            return;
+        }
+        imageInput?.click();
+    });
+
+    imageInput?.addEventListener("change", (e) => {
+        const files = Array.from((e.target as HTMLInputElement).files || []);
+        let addedCount = 0;
+        let errors = [];
+
+        for (const file of files) {
+            if (selectedFiles.length >= MAX_IMAGES) {
+                errors.push("Límite de 5 imágenes alcanzado.");
+                break;
+            }
+
+            // Check format
+            if (!ALLOWED_TYPES.includes(file.type)) {
+                errors.push(`${file.name}: Formato no válido.`);
+                continue;
+            }
+
+            // Check duplicates (name and size)
+            const isDuplicate = selectedFiles.some(f => f.name === file.name && f.size === file.size);
+            if (isDuplicate) {
+                errors.push(`${file.name}: Imagen ya seleccionada.`);
+                continue;
+            }
+
+            selectedFiles.push(file);
+            addedCount++;
+        }
+
+        if (errors.length > 0) {
+            showError(errors[0]);
+        }
+
+        if (addedCount > 0) {
+            updatePreviews();
+            checkUploadButtonState();
+        }
+
+        imageInput.value = "";
+    });
+
+    function addUserMessage(text: string, images: File[] = []) {
+        if (!chatMessages) return;
+        const messageArticle = document.createElement("article");
+        messageArticle.className =
+            "flex flex-col items-end gap-2 self-end max-w-[85%] animate-in fade-in slide-in-from-right-2 duration-300";
+        
+        let imagesHtml = "";
+        if (images.length > 0) {
+            imagesHtml = `
+                <div class="flex flex-wrap justify-end gap-1 mb-1">
+                    ${images.map(() => `
+                        <div class="w-20 h-20 rounded-lg overflow-hidden border border-border shadow-sm bg-gray-100">
+                            <img src="" class="w-full h-full object-cover" alt="uploaded image">
+                        </div>
+                    `).join("")}
+                </div>
+            `;
+        }
+
+        messageArticle.innerHTML = `
+            ${imagesHtml}
+            ${text ? `
+                <p class="bg-primary text-white rounded-2xl rounded-tr-none px-4 py-2.5 text-sm shadow-sm">
+                    ${text}
+                </p>
+            ` : ""}
+            <span class="text-[10px] text-secondary px-1">Usuario</span>
+        `;
+        
+        chatMessages.appendChild(messageArticle);
+
+        if (images.length > 0) {
+            const imgElements = messageArticle.querySelectorAll("img");
+            images.forEach((file, i) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    if (imgElements[i] && e.target?.result) {
+                        imgElements[i].src = e.target.result as string;
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function addIAMessage(text: string) {
+        if (!chatMessages) return;
+        const messageArticle = document.createElement("article");
+        messageArticle.className =
+            "flex gap-3 max-w-[85%] animate-in fade-in slide-in-from-left-2 duration-300";
+        messageArticle.innerHTML = `
+            <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0 shadow-sm border-2 border-primary/20 text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg>
+            </div>
+            <p class="bg-white border border-border/50 shadow-sm rounded-2xl rounded-tl-none px-4 py-2.5 text-sm text-text">
+                ${text}
+            </p>
+        `;
+        chatMessages.appendChild(messageArticle);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    chatInput?.addEventListener("input", autoResizeChatInput);
+    
+    chatInput?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            chatSendBtn?.click();
+        }
+    });
+
+    chatSendBtn?.addEventListener("click", () => {
+        if (!chatInput) return;
+        const text = chatInput.value.trim();
+        
+        if (!text && selectedFiles.length === 0) return;
+
+        const hasImages = selectedFiles.length > 0;
+        const currentFiles = [...selectedFiles];
+        
+        chatInput.value = "";
+        autoResizeChatInput();
+        
+        addUserMessage(text, currentFiles);
+
+        selectedFiles = [];
+        updatePreviews();
+        checkUploadButtonState();
+
+        setTimeout(() => {
+            addIAMessage(
+                hasImages 
+                    ? "He recibido tus imágenes y tu mensaje. Estoy analizando el contenido visual para ayudarte con el registro del producto."
+                    : "¡Hola! Soy tu asistente. Estoy analizando tu mensaje para ayudarte con el registro del producto.",
+            );
+        }, 600);
+    });
+</script>

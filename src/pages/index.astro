@@ -1,0 +1,316 @@
+---
+import Layout from "@/src/layouts/Layout.astro";
+import Search from "@/src/assets/search.astro";
+import FiltersIcon from "@/src/assets/filters.astro";
+import CardProducto from "@/src/components/card-productos.astro";
+import { fetchProductsDB, fetchDB, supabase } from "@/src/lib/supabase";
+
+// --- Verificar rol del usuario ---
+const accessToken = Astro.cookies.get("sb-access-token")?.value;
+const refreshToken = Astro.cookies.get("sb-refresh-token")?.value;
+
+let isEditor = false;
+if (accessToken && refreshToken) {
+	const { data: sessionData } = await supabase.auth.setSession({
+		access_token: accessToken,
+		refresh_token: refreshToken,
+	});
+	const userRole =
+		sessionData.user?.app_metadata?.role ||
+		sessionData.user?.user_metadata?.role ||
+		"user";
+	isEditor = userRole === "editor";
+}
+
+// --- Password Recovery: PKCE flow via exchangeCodeForSession ---
+// Supabase sends ?code=... to this page (the redirectTo URL).
+// We exchange it server-side here (page level) so cookies can be set
+// before response headers are sent — components cannot do this reliably.
+let showResetModal = false;
+
+const recoveryCode = Astro.url.searchParams.get("code");
+if (recoveryCode) {
+	const { data: recoveryData, error: recoveryError } =
+		await supabase.auth.exchangeCodeForSession(recoveryCode);
+
+	if (!recoveryError && recoveryData.session) {
+		const DAY = 60 * 60 * 24;
+		Astro.cookies.set("sb-access-token", recoveryData.session.access_token, {
+			path: "/",
+			maxAge: DAY,
+			httpOnly: false,
+			sameSite: "lax",
+		});
+		Astro.cookies.set(
+			"sb-refresh-token",
+			recoveryData.session.refresh_token,
+			{
+				path: "/",
+				maxAge: DAY,
+				httpOnly: false,
+				sameSite: "lax",
+			},
+		);
+		showResetModal = true;
+	}
+}
+
+const search = Astro.url.searchParams.get("search-products") || "";
+const state = Astro.url.searchParams.get("state-products") || "todos";
+const gender = Astro.url.searchParams.get("gender-products") || "todos";
+const category = Astro.url.searchParams.get("category-products") || "todas";
+
+// Fetch genders for the filter and cards
+const generos = (await fetchDB({
+	table: "genero_producto",
+	columns: "id_genero, nombre_genero",
+})) as { id_genero: number; nombre_genero: string }[];
+
+const findGenderName = (id: number) =>
+	generos?.find((g) => g.id_genero === id)?.nombre_genero || "General";
+
+// Fetch categories for the filter and cards
+const categorias = (await fetchDB({
+	table: "tipo_producto",
+	columns: "id_tipo_producto, nombre_tipo_producto",
+})) as { id_tipo_producto: number; nombre_tipo_producto: string }[];
+
+const findCategoryName = (id: number) =>
+	categorias?.find((c) => c.id_tipo_producto === id)?.nombre_tipo_producto ||
+	"Categoría";
+
+// Fetch all product images for optimization
+const images = (await fetchDB({
+	table: "imagen_producto",
+	columns: "url_imagen,id_producto",
+})) as { url_imagen: string; id_producto: number }[];
+
+const imagesByProduct =
+	images?.reduce(
+		(acc, img) => {
+			if (!acc[img.id_producto]) acc[img.id_producto] = [];
+			acc[img.id_producto].push(img.url_imagen);
+			return acc;
+		},
+		{} as Record<number, string[]>,
+	) || {};
+
+const findProductImages = (id: number) => imagesByProduct[id] || [];
+
+const { data: productos, error: errorProductos } = await fetchProductsDB({
+	search,
+	state,
+	gender,
+	category,
+});
+
+if (errorProductos) {
+	console.error("Error al obtener los productos:", errorProductos);
+}
+---
+
+
+<Layout showResetModal={showResetModal}>
+	<section class="max-w-6xl mx-auto">
+		<!-- filtros -->
+		<form
+			id="filter-form"
+			class="flex flex-col lg:flex-row md:items-center justify-between gap-4 mb-8"
+		>
+			<div
+				class="flex items-center justify-between gap-2 border-2 border-border bg-surface hover:border-primary rounded-xl px-4 transition-colors shadow-sm w-full lg:w-fit h-13"
+			>
+				<input
+					name="search-products"
+					type="text"
+					placeholder="Buscar Productos"
+					class="outline-none bg-transparent h-full w-48"
+					value={search}
+				/>
+				<button
+					type="submit"
+					title="Buscar Productos"
+					class="text-secondary hover:text-primary transition-colors px-1"
+				>
+					<Search color="currentColor" />
+				</button>
+			</div>
+			<!-- Grouped Filters -->
+			<div
+				class="flex flex-col sm:flex-row items-stretch sm:items-center border-2 border-border bg-surface hover:border-primary rounded-xl transition-colors shadow-sm overflow-hidden w-full lg:w-fit min-h-13"
+			>
+				<!-- Filtros Label/Icon -->
+				<div
+					class="flex items-center gap-2 px-4 py-3 bg-gray-50/50 border-b sm:border-b-0 sm:border-r border-border h-full"
+				>
+					<FiltersIcon size={18} class="text-primary shrink-0" />
+					<span
+						class="text-sm font-black uppercase tracking-widest text-primary whitespace-nowrap"
+						>Filtros</span
+					>
+				</div>
+
+				<!-- Estado Filter Section -->
+				<div
+					class="flex flex-1 items-center px-4 hover:bg-gray-50/30 transition-colors border-b sm:border-b-0 sm:border-r border-border sm:border-transparent"
+				>
+					<span
+						class="text-[10px] font-bold uppercase text-text-muted mr-2"
+						>Estado:</span
+					>
+					<select
+						id="state-search-products"
+						name="state-products"
+						class="bg-transparent text-text py-3 outline-none appearance-none cursor-pointer font-medium text-sm w-full sm:w-fit"
+					>
+						<option value="todos" selected={state === "todos"}
+							>Todos</option
+						>
+						<option value="activos" selected={state === "activos"}
+							>En Bodega</option
+						>
+						<option
+							value="inactivos"
+							selected={state === "inactivos"}>Agotados</option
+						>
+					</select>
+				</div>
+
+				<div class="hidden sm:block w-px h-8 bg-border"></div>
+
+				<!-- Género Filter Section -->
+				<div
+					class="flex flex-1 items-center px-4 hover:bg-gray-50/30 transition-colors border-b sm:border-b-0 sm:border-r border-border sm:border-transparent"
+				>
+					<span
+						class="text-[10px] font-bold uppercase text-text-muted mr-2"
+						>Género:</span
+					>
+					<select
+						id="gender-search-products"
+						name="gender-products"
+						class="bg-transparent text-text py-3 outline-none appearance-none cursor-pointer font-medium text-sm w-full sm:w-fit"
+					>
+						<option value="todos" selected={gender === "todos"}
+							>Todos</option
+						>
+						{
+							generos?.map((g) => (
+								<option
+									value={g.id_genero.toString()}
+									selected={gender === g.id_genero.toString()}
+								>
+									{g.nombre_genero}
+								</option>
+							))
+						}
+					</select>
+				</div>
+
+				<div class="hidden sm:block w-px h-8 bg-border"></div>
+
+				<!-- Categoría Filter Section -->
+				<div
+					class="flex flex-1 items-center px-4 hover:bg-gray-50/30 transition-colors"
+				>
+					<span
+						class="text-[10px] font-bold uppercase text-text-muted mr-2"
+						>Categoría:</span
+					>
+					<select
+						id="category-search-products"
+						name="category-products"
+						class="bg-transparent text-text py-3 outline-none appearance-none cursor-pointer font-medium text-sm w-full sm:w-fit"
+					>
+						<option value="todas" selected={category === "todas"}
+							>Todas</option
+						>
+						{
+							categorias?.map((c) => (
+								<option
+									value={c.id_tipo_producto.toString()}
+									selected={
+										category ===
+										c.id_tipo_producto.toString()
+									}
+								>
+									{c.nombre_tipo_producto}
+								</option>
+							))
+						}
+					</select>
+				</div>
+			</div>
+		</form>
+
+		<!-- contenido -->
+		<section
+			id="products-grid"
+			class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6"
+		>
+			{
+				productos?.map((producto) => (
+					<CardProducto
+						producto={producto}
+						nombreGenero={findGenderName(producto.id_genero)}
+						nombreCategoria={findCategoryName(
+							producto.id_tipo_producto,
+						)}
+						imagenesUrls={findProductImages(producto.id_producto)}
+						isEditor={isEditor}
+					/>
+				))
+			}
+		</section>
+
+		<!-- Empty state -->
+		<div
+			id="no-results"
+			class={productos?.length === 0
+				? "text-center py-20"
+				: "hidden text-center py-20"}
+		>
+			<div
+				class="bg-surface border-2 border-dashed border-border rounded-2xl p-12 max-w-md mx-auto"
+			>
+				<div
+					class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6"
+				>
+					<Search size={40} color="var(--text-muted)" />
+				</div>
+				<h3 class="text-2xl font-black text-primary mb-2">
+					No se encontraron productos
+				</h3>
+				<p class="text-text-muted">
+					Intenta ajustar tus filtros de búsqueda o el estado del
+					producto.
+				</p>
+				<button
+					onclick="window.location.href = window.location.pathname;"
+					class="mt-6 px-6 py-2 bg-primary text-white font-bold rounded-lg hover:bg-accent transition-colors"
+				>
+					Limpiar Filtros
+				</button>
+			</div>
+		</div>
+	</section>
+	<script>
+		const form = document.getElementById("filter-form") as HTMLFormElement;
+		const status = document.getElementById(
+			"state-search-products",
+		) as HTMLSelectElement;
+		const gender = document.getElementById(
+			"gender-search-products",
+		) as HTMLSelectElement;
+		const category = document.getElementById(
+			"category-search-products",
+		) as HTMLSelectElement;
+
+		const filters = [status, gender, category];
+		filters.forEach((filter) => {
+			filter?.addEventListener("change", () => {
+				form.submit();
+			});
+		});
+	</script>
+</Layout>

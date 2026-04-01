@@ -1,0 +1,1246 @@
+---
+import Eye from "@/src/assets/eye.astro";
+import EyeOff from "@/src/assets/eye-off.astro";
+import { supabase } from "@/src/lib/supabase";
+import { actions, isInputError } from "astro:actions";
+
+interface Props {
+    title: string;
+    showResetModal?: boolean;
+}
+
+const { title, showResetModal = false } = Astro.props;
+const currentPath = Astro.url.pathname;
+
+const loginResult = Astro.getActionResult(actions.login);
+const loginError =
+    loginResult && !loginResult.data?.success ? loginResult.data?.error : null;
+const loginInputErrors = isInputError(loginResult?.error)
+    ? loginResult.error.fields
+    : {};
+
+const registerResult = Astro.getActionResult(actions.register);
+const registerError =
+    registerResult && !registerResult.data?.success
+        ? registerResult.data?.error
+        : null;
+const registerSuccess = registerResult?.data?.success
+    ? registerResult.data?.message
+    : null;
+const registerInputErrors = isInputError(registerResult?.error)
+    ? registerResult.error.fields
+    : {};
+
+// --- Regular session from cookies ---
+const accessToken = Astro.cookies.get("sb-access-token")?.value;
+const refreshToken = Astro.cookies.get("sb-refresh-token")?.value;
+
+let user = null;
+let role = "user";
+
+if (accessToken && refreshToken) {
+    const { data: sessionData } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+    });
+    user = sessionData.user;
+    role = user?.app_metadata?.role || user?.user_metadata?.role || "user";
+}
+
+let displayName: string | null = null;
+let displayEmail: string | null = null;
+if (user) {
+    displayName = user.user_metadata?.displayName || null;
+    displayEmail = user.email || null;
+}
+
+const isAuthorized = role === "editor";
+---
+
+<header
+    class="py-4 px-6 mt-4 flex flex-col md:flex-row items-center justify-between gap-4 border-2 border-border bg-surface/80 backdrop-blur-md rounded-2xl shadow-sm sticky top-4 z-40 transition-all"
+>
+    <!-- Brand -->
+    <a
+        href="/"
+        class="flex flex-col items-center md:items-start group transition-transform hover:scale-[1.02] active:scale-[0.98]"
+    >
+        <h1
+            class="text-2xl md:text-3xl font-black tracking-tight text-primary group-hover:opacity-80 transition-opacity"
+        >
+            {title}
+        </h1>
+        <p
+            class="text-[10px] md:text-xs font-bold uppercase tracking-widest text-text-muted mt-0.5"
+        >
+            Tu tienda de confianza
+        </p>
+    </a>
+
+    <!-- Navigation -->
+    <div class="flex items-center gap-2 w-full md:w-auto">
+        <nav
+            class="flex gap-1.5 bg-gray-50/50 p-1.5 rounded-xl border-2 border-border shadow-sm h-12 flex-1 md:flex-none"
+        >
+            <a
+                href="/"
+                class:list={[
+                    "flex-1 md:flex-none md:px-6 flex items-center justify-center rounded-lg font-bold transition-all duration-200 h-full text-sm",
+                    currentPath === "/"
+                        ? "bg-primary text-white shadow-md"
+                        : "text-text hover:bg-white hover:shadow-sm",
+                ]}
+            >
+                Catálogo
+            </a>
+            <a
+                href="/formulario"
+                class:list={[
+                    "flex-1 md:flex-none md:px-6 flex items-center justify-center rounded-lg font-bold transition-all duration-200 h-full text-sm",
+                    currentPath === "/formulario"
+                        ? "bg-primary text-white shadow-md"
+                        : "text-text hover:bg-white hover:shadow-sm",
+                ]}
+            >
+                Formulario
+            </a>
+        </nav>
+
+        <div class:list={["relative shrink-0", user ? "hidden" : ""]}>
+            <button
+                id="header-login-trigger"
+                type="button"
+                class="h-12 px-4 md:px-5 rounded-xl border-2 border-border bg-white text-primary font-bold text-sm hover:bg-gray-50 transition-colors shadow-sm"
+                aria-haspopup="dialog"
+                aria-controls="header-login-modal"
+            >
+                Iniciar sesión
+            </button>
+        </div>
+        <div class:list={["relative shrink-0", user ? "" : "hidden"]}>
+            <div
+                class="flex items-center h-12 rounded-xl border-2 border-border bg-white overflow-hidden shadow-sm"
+            >
+                <button
+                    id="header-user-display"
+                    type="button"
+                    class="h-full px-4 text-primary hover:bg-gray-50 transition-colors flex items-center gap-2 font-bold text-sm"
+                >
+                    <span
+                        >{
+                            displayName || displayEmail?.split("@")[0] || "User"
+                        }</span
+                    >
+                </button>
+                <span class="text-border">|</span>
+                <button
+                    id="header-logout-trigger"
+                    type="button"
+                    class="h-full px-4 text-black hover:bg-gray-50 transition-colors font-bold text-sm"
+                >
+                    Cerrar sesión
+                </button>
+            </div>
+        </div>
+        <div class:list={["relative shrink-0", isAuthorized ? "" : "hidden"]}>
+            <button
+                id="header-register-trigger"
+                type="button"
+                class="h-12 px-4 md:px-5 rounded-xl border-2 border-border bg-white text-primary font-bold text-sm hover:bg-gray-50 transition-colors shadow-sm flex items-center justify-center"
+                aria-haspopup="dialog"
+                aria-controls="header-login-modal"
+            >
+                <svg
+                    class="w-5 h-5"
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="8.5" cy="7" r="4"></circle>
+                    <line x1="20" y1="8" x2="20" y2="14"></line>
+                    <line x1="23" y1="11" x2="17" y2="11"></line>
+                </svg>
+            </button>
+        </div>
+    </div>
+</header>
+
+<div
+    id="header-login-modal"
+    class="fixed inset-0 z-50 hidden items-center justify-center p-4"
+    data-show-reset={showResetModal ? "true" : "false"}
+>
+    <div
+        id="header-login-backdrop"
+        class="absolute inset-0 bg-primary/40 backdrop-blur-sm"
+    >
+    </div>
+
+    <div class="relative w-full max-w-md z-10">
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="header-login-title"
+            class="relative w-full rounded-2xl bg-white border-2 border-border shadow-2xl overflow-hidden transition-all duration-300"
+            id="login-modal-container"
+        >
+            <button
+                id="close-login-modal"
+                type="button"
+                class="absolute top-4 right-4 w-8 h-8 rounded-full bg-primary text-white hover:bg-accent transition-colors z-10 flex items-center justify-center font-bold text-sm leading-none"
+                aria-label="Cerrar modal"
+            >
+                ✕
+            </button>
+
+            <!-- Modal Slider -->
+            <div
+                id="modal-slider"
+                class="flex transition-transform duration-500 ease-out transform translate-x-0"
+            >
+                <!-- Slide 1: Login -->
+                <div
+                    class="w-full shrink-0 p-6 flex flex-col"
+                    id="slide-login"
+                    style="min-height: 350px;"
+                >
+                    <h3
+                        id="header-login-title"
+                        class="text-xl font-bold text-primary mb-1"
+                    >
+                        Iniciar sesión
+                    </h3>
+                    <p class="text-sm text-secondary mb-5">
+                        Completa tus datos para entrar a tu cuenta.
+                    </p>
+
+                    <form
+                        method="POST"
+                        action={actions.login}
+                        class="space-y-4"
+                    >
+                        {
+                            loginError && (
+                                <div
+                                    id="login-error-message"
+                                    class="p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium animate-in fade-in slide-in-from-top-1"
+                                >
+                                    {loginError.message}
+                                </div>
+                            )
+                        }
+                        {
+                            Object.keys(loginInputErrors).length > 0 && (
+                                <div
+                                    id="login-input-errors"
+                                    class="p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium space-y-1"
+                                >
+                                    {Object.values(loginInputErrors).map(
+                                        (error) => (
+                                            <p>• {error}</p>
+                                        ),
+                                    )}
+                                </div>
+                            )
+                        }
+                        <div class="flex flex-col gap-1">
+                            <label
+                                for="login-email"
+                                class="text-sm font-medium text-text"
+                                >Usuario o Correo</label
+                            >
+                            <input
+                                id="login-email"
+                                name="email"
+                                type="text"
+                                required
+                                placeholder="tu-usuario o tu-correo@dominio.com"
+                                class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                            />
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label
+                                for="login-password"
+                                class="text-sm font-medium text-text"
+                                >Contraseña</label
+                            >
+                            <div class="relative group">
+                                <input
+                                    id="login-password"
+                                    name="password"
+                                    type="password"
+                                    required
+                                    minlength="8"
+                                    placeholder="********"
+                                    class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                                />
+                                <button
+                                    type="button"
+                                    class="toggle-password-btn absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors p-1"
+                                >
+                                    <div class="eye-visible hidden">
+                                        <EyeOff class="w-4 h-4" />
+                                    </div>
+                                    <div class="eye-hidden">
+                                        <Eye class="w-4 h-4" />
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between">
+                            <label
+                                class="inline-flex items-center gap-2 text-xs text-text-muted cursor-pointer"
+                            >
+                                <input
+                                    type="checkbox"
+                                    name="remember"
+                                    class="accent-primary w-4 h-4 rounded border-border"
+                                />
+                                Recordar sesión
+                            </label>
+                            <span
+                                id="go-to-forgot"
+                                class="text-xs text-primary hover:text-accent cursor-pointer"
+                                >¿Olvidaste tu contraseña?
+                            </span>
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="w-full bg-primary hover:bg-accent text-white font-semibold py-2.5 rounded-lg transition-all duration-300"
+                        >
+                            Iniciar sesión
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Slide 2: Register -->
+                <div
+                    class="w-full shrink-0 p-6 flex flex-col"
+                    id="slide-register"
+                    style="min-height: 430px;"
+                >
+                    <h3 class="text-xl font-bold text-primary mb-1">
+                        Crear Cuenta
+                    </h3>
+                    <p class="text-sm text-secondary mb-5">
+                        Registra un nuevo usuario en la plataforma.
+                    </p>
+
+                    <form
+                        method="POST"
+                        action={actions.register}
+                        class="space-y-4"
+                    >
+                        {
+                            registerError && (
+                                <div
+                                    id="register-error-message"
+                                    class="p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium animate-in fade-in slide-in-from-top-1"
+                                >
+                                    {registerError.message}
+                                </div>
+                            )
+                        }
+                        {
+                            registerSuccess && (
+                                <div
+                                    id="register-success-message"
+                                    class="p-3 rounded-xl bg-green-50 border border-green-200 text-green-600 text-sm font-medium animate-in fade-in slide-in-from-top-1"
+                                >
+                                    {registerSuccess}
+                                </div>
+                            )
+                        }
+                        {
+                            Object.keys(registerInputErrors).length > 0 && (
+                                <div class="p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium space-y-1">
+                                    {Object.values(registerInputErrors).map(
+                                        (error) => (
+                                            <p>• {error}</p>
+                                        ),
+                                    )}
+                                </div>
+                            )
+                        }
+                        <div class="flex flex-col gap-1">
+                            <label
+                                for="register-email"
+                                class="text-sm font-medium text-text"
+                                >Correo</label
+                            >
+                            <input
+                                id="register-email"
+                                name="email"
+                                type="email"
+                                required
+                                placeholder="correo@ejemplo.com"
+                                class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                            />
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label
+                                for="register-username"
+                                class="text-sm font-medium text-text"
+                                >Usuario</label
+                            >
+                            <input
+                                id="register-username"
+                                name="username"
+                                type="text"
+                                required
+                                minlength="3"
+                                maxlength="20"
+                                placeholder="mi_usuario"
+                                class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                            />
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label
+                                for="register-password"
+                                class="text-sm font-medium text-text"
+                                >Contraseña</label
+                            >
+                            <div class="relative group">
+                                <input
+                                    id="register-password"
+                                    name="password"
+                                    type="password"
+                                    required
+                                    minlength="8"
+                                    placeholder="********"
+                                    class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                                />
+                                <button
+                                    type="button"
+                                    class="toggle-password-btn absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors p-1"
+                                >
+                                    <div class="eye-visible hidden">
+                                        <EyeOff class="w-4 h-4" />
+                                    </div>
+                                    <div class="eye-hidden">
+                                        <Eye class="w-4 h-4" />
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label
+                                for="register-role"
+                                class="text-sm font-medium text-text"
+                                >Rol del Usuario</label
+                            >
+                            <div class="relative">
+                                <select
+                                    id="register-role"
+                                    name="role"
+                                    required
+                                    class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all appearance-none pr-8 text-sm cursor-pointer font-medium"
+                                >
+                                    <option value="user"
+                                        >User (Visualizador)</option
+                                    >
+                                    <option value="editor"
+                                        >Editor (Administrador)</option
+                                    >
+                                </select>
+                                <div
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-secondary"
+                                >
+                                    <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                        ><path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M19 9l-7 7-7-7"></path></svg
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="w-full bg-primary hover:bg-accent text-white font-semibold py-2.5 rounded-lg transition-all duration-300 mt-2"
+                        >
+                            Crear usuario
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Slide 3: Forgot Password -->
+                <div
+                    class="w-full shrink-0 p-6 flex flex-col"
+                    id="slide-forgot"
+                    style="min-height: 320px;"
+                >
+                    <h3 class="text-xl font-bold text-primary mb-1">
+                        Recuperar Contraseña
+                    </h3>
+                    <p class="text-sm text-secondary mb-5">
+                        Ingresa tu correo para recibir un enlace de
+                        recuperación.
+                    </p>
+
+                    <div class="space-y-4">
+                        <div class="flex flex-col gap-1">
+                            <label
+                                for="forgot-email"
+                                class="text-sm font-medium text-text"
+                                >Correo</label
+                            >
+                            <input
+                                id="forgot-email"
+                                type="email"
+                                required
+                                placeholder="tu-correo@dominio.com"
+                                class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                            />
+                        </div>
+
+                        <button
+                            id="reset-password-btn"
+                            type="button"
+                            class="w-full bg-primary hover:bg-accent text-white font-semibold py-2.5 rounded-lg transition-all duration-300"
+                        >
+                            Enviar enlace
+                        </button>
+
+                        <button
+                            type="button"
+                            class="go-to-login-btn w-full text-sm text-text-muted hover:text-primary transition-colors font-medium"
+                        >
+                            Volver al inicio de sesión
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Slide 4: Reset Password -->
+                <div
+                    class="w-full shrink-0 p-6 flex flex-col"
+                    id="slide-reset"
+                    style="min-height: 380px;"
+                >
+                    <h3 class="text-xl font-bold text-primary mb-1">
+                        Nueva Contraseña
+                    </h3>
+                    <p class="text-sm text-secondary mb-5">
+                        Establece tu nueva contraseña de acceso.
+                    </p>
+
+                    <form id="reset-password-form" class="space-y-4">
+                        <div class="flex flex-col gap-1">
+                            <label
+                                for="new-password"
+                                class="text-sm font-medium text-text"
+                                >Nueva Contraseña</label
+                            >
+                            <div class="relative group">
+                                <input
+                                    id="new-password"
+                                    name="password"
+                                    type="password"
+                                    required
+                                    minlength="8"
+                                    placeholder="********"
+                                    class="w-full px-3 py-2 pr-10 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                                />
+                                <button
+                                    type="button"
+                                    class="toggle-password-btn absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors p-1"
+                                >
+                                    <div class="eye-visible hidden">
+                                        <EyeOff class="w-4 h-4" />
+                                    </div>
+                                    <div class="eye-hidden">
+                                        <Eye class="w-4 h-4" />
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label
+                                for="confirm-password"
+                                class="text-sm font-medium text-text"
+                                >Confirmar Contraseña</label
+                            >
+                            <div class="relative group">
+                                <input
+                                    id="confirm-password"
+                                    type="password"
+                                    required
+                                    minlength="8"
+                                    placeholder="********"
+                                    class="w-full px-3 py-2 pr-10 border-2 border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all text-sm"
+                                />
+                                <button
+                                    type="button"
+                                    class="toggle-password-btn absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors p-1"
+                                >
+                                    <div class="eye-visible hidden">
+                                        <EyeOff class="w-4 h-4" />
+                                    </div>
+                                    <div class="eye-hidden">
+                                        <Eye class="w-4 h-4" />
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div
+                            id="password-match-error"
+                            class="hidden text-xs text-red-500 font-medium mt-1"
+                        >
+                            Las contraseñas no coinciden.
+                        </div>
+
+                        <button
+                            id="submit-new-password"
+                            type="submit"
+                            disabled
+                            class="w-full bg-primary hover:bg-accent text-white font-semibold py-2.5 rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Actualizar Contraseña
+                        </button>
+
+                        <button
+                            type="button"
+                            class="go-to-login-btn w-full text-sm text-text-muted hover:text-primary transition-colors font-medium mt-2"
+                        >
+                            Volver al inicio de sesión
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Slide 5: Profile -->
+                <div
+                    class="w-full shrink-0 p-6 flex flex-col"
+                    id="slide-profile"
+                    style="min-height: 420px;"
+                >
+                    <h3 class="text-xl font-bold text-primary mb-1 text-center">
+                        Mi Perfil
+                    </h3>
+                    <p class="text-sm text-secondary mb-5 text-center">
+                        Edita tu información personal.
+                    </p>
+
+                    <div class="space-y-4">
+                        <!-- Username (Editable) -->
+                        <div class="flex flex-col" id="profile-field-username">
+                            <label class="text-sm font-medium text-text mb-1"
+                                >Usuario</label
+                            >
+                            <div
+                                id="profile-username-display"
+                                class="flex items-center border-2 border-border rounded-xl bg-gray-50 overflow-hidden h-10"
+                            >
+                                <div
+                                    class="flex-1 px-3 py-2 text-sm h-full flex items-center"
+                                >
+                                    {displayName || "User"}
+                                </div>
+                                <button
+                                    type="button"
+                                    id="edit-username-btn"
+                                    class="edit-btn w-10 h-full border-l-2 border-border bg-white text-primary hover:bg-gray-50 transition-colors flex items-center justify-center"
+                                    title="Editar usuario"
+                                >
+                                    <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                                        ></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div
+                                id="profile-username-edit"
+                                class="hidden flex items-center gap-2 h-10"
+                            >
+                                <input
+                                    type="text"
+                                    id="profile-username-input"
+                                    class="flex-1 px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:border-primary transition-all text-sm h-full"
+                                    placeholder="Nuevo usuario"
+                                />
+                                <button
+                                    type="button"
+                                    id="save-username-btn"
+                                    class="w-10 h-full bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center rounded-xl shrink-0"
+                                    title="Guardar"
+                                >
+                                    <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </button>
+                                <button
+                                    type="button"
+                                    id="cancel-username-btn"
+                                    class="w-10 h-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors flex items-center justify-center rounded-xl shrink-0"
+                                    title="Cancelar"
+                                >
+                                    <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Email (Blocked) -->
+                        <div class="flex flex-col gap-1">
+                            <label class="text-sm font-medium text-text"
+                                >Correo</label
+                            >
+                            <div
+                                class="flex items-center border-2 border-border rounded-xl bg-gray-50 overflow-hidden h-10"
+                            >
+                                <div
+                                    class="flex-1 px-3 py-2 text-sm text-text-muted h-full flex items-center"
+                                >
+                                    {user?.email || "No disponible"}
+                                </div>
+                                <div
+                                    class="w-10 h-full border-l-2 border-border bg-gray-100 text-text-muted flex items-center justify-center"
+                                >
+                                    <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                                        ></path>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Role (Editable) -->
+                        <div class="flex flex-col" id="profile-field-role">
+                            <label class="text-sm font-medium text-text mb-1"
+                                >Rol</label
+                            >
+                            <div
+                                id="profile-role-display"
+                                class="flex items-center border-2 border-border rounded-xl bg-gray-50 overflow-hidden h-10"
+                            >
+                                <div
+                                    class="flex-1 px-3 py-2 text-sm capitalize h-full flex items-center"
+                                >
+                                    {role}
+                                </div>
+                                <button
+                                    type="button"
+                                    id="edit-role-btn"
+                                    class="edit-btn w-10 h-full border-l-2 border-border bg-white text-primary hover:bg-gray-50 transition-colors flex items-center justify-center"
+                                    title="Editar rol"
+                                >
+                                    <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                                        ></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div
+                                id="profile-role-edit"
+                                class="hidden flex items-center gap-2 h-10"
+                            >
+                                <div class="relative flex-1 h-full">
+                                    <select
+                                        id="profile-role-select"
+                                        class="w-full px-3 py-2 border-2 border-border rounded-xl bg-white focus:outline-none focus:border-primary transition-all text-sm h-full appearance-none cursor-pointer"
+                                    >
+                                        <option value="user"
+                                            >User (Visualizador)</option
+                                        >
+                                        <option value="editor"
+                                            >Editor (Administrador)</option
+                                        >
+                                    </select>
+                                    <div
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-secondary"
+                                    >
+                                        <svg
+                                            class="w-4 h-4"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                            ><path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M19 9l-7 7-7-7"></path></svg
+                                        >
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    id="save-role-btn"
+                                    class="w-10 h-full bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center rounded-xl shrink-0"
+                                    title="Guardar"
+                                >
+                                    <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </button>
+                                <button
+                                    type="button"
+                                    id="cancel-role-btn"
+                                    class="w-10 h-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors flex items-center justify-center rounded-xl shrink-0"
+                                    title="Cancelar"
+                                >
+                                    <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            id="close-profile-btn"
+                            class="w-full bg-primary hover:bg-accent text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 mt-6 text-sm shadow-md hover:shadow-lg active:scale-[0.98]"
+                        >
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    import { actions } from "astro:actions";
+
+    const loginTrigger = document.getElementById(
+        "header-login-trigger",
+    ) as HTMLButtonElement | null;
+    const logoutTrigger = document.getElementById(
+        "header-logout-trigger",
+    ) as HTMLButtonElement | null;
+    const userDisplay = document.getElementById(
+        "header-user-display",
+    ) as HTMLSpanElement | null;
+    const registerTrigger = document.getElementById(
+        "header-register-trigger",
+    ) as HTMLButtonElement | null;
+    const loginModal = document.getElementById(
+        "header-login-modal",
+    ) as HTMLDivElement | null;
+    const closeLoginModalBtn = document.getElementById(
+        "close-login-modal",
+    ) as HTMLButtonElement | null;
+    const loginBackdrop = document.getElementById(
+        "header-login-backdrop",
+    ) as HTMLDivElement | null;
+    const slider = document.getElementById(
+        "modal-slider",
+    ) as HTMLDivElement | null;
+
+    const goToForgotBtn = document.getElementById("go-to-forgot");
+    const goToLoginBtns = document.querySelectorAll(".go-to-login-btn");
+    const resetPasswordBtn = document.getElementById("reset-password-btn");
+    const forgotEmailInput = document.getElementById(
+        "forgot-email",
+    ) as HTMLInputElement;
+    const resetPasswordForm = document.getElementById(
+        "reset-password-form",
+    ) as HTMLFormElement;
+    const newPasswordInput = document.getElementById(
+        "new-password",
+    ) as HTMLInputElement;
+    const confirmPasswordInput = document.getElementById(
+        "confirm-password",
+    ) as HTMLInputElement;
+    const submitResetBtn = document.getElementById(
+        "submit-new-password",
+    ) as HTMLButtonElement;
+    const matchError = document.getElementById("password-match-error");
+
+    const openModal = () => {
+        loginModal?.classList.remove("hidden");
+        loginModal?.classList.add("flex");
+        document.body.style.overflow = "hidden";
+    };
+
+    const closeModal = () => {
+        loginModal?.classList.add("hidden");
+        loginModal?.classList.remove("flex");
+        document.body.style.overflow = "auto";
+    };
+
+    const slideTo = (index: number) => {
+        if (slider) {
+            slider.style.transform = `translateX(-${index * 100}%)`;
+        }
+        updateModalHeight(index);
+    };
+
+    const modalContainer = document.getElementById(
+        "login-modal-container",
+    ) as HTMLDivElement | null;
+
+    const slideHeights: Record<number, string> = {
+        0: "350px", // Login
+        1: "485px", // Register - más campos
+        2: "275px", // Forgot
+        3: "360px", // Reset
+        4: "420px", // Profile
+    };
+
+    function updateModalHeight(index: number) {
+        if (modalContainer) {
+            modalContainer.style.height = slideHeights[index] || "auto";
+            modalContainer.style.minHeight = slideHeights[index] || "auto";
+        }
+    }
+
+    loginTrigger?.addEventListener("click", () => {
+        slideTo(0);
+        openModal();
+    });
+
+    logoutTrigger?.addEventListener("click", async () => {
+        await actions.closeSession();
+        window.location.href = "/";
+    });
+
+    userDisplay?.addEventListener("click", () => {
+        slideTo(4);
+        openModal();
+    });
+
+    registerTrigger?.addEventListener("click", () => {
+        slideTo(1);
+        openModal();
+    });
+
+    goToForgotBtn?.addEventListener("click", () => {
+        slideTo(2);
+    });
+
+    goToLoginBtns.forEach((btn) => {
+        btn.addEventListener("click", () => slideTo(0));
+    });
+
+    // Handle reset password email request
+    resetPasswordBtn?.addEventListener("click", async () => {
+        const email = forgotEmailInput.value;
+        if (!email) return (window as any).showToast("Por favor, ingresa tu correo.", "error");
+
+        await actions.sentEmailForResetPassword({ email });
+        (window as any).showToast("Si el correo existe, recibirás un enlace de recuperación.", "info");
+        slideTo(0);
+    });
+
+    // Password matching validation
+    const validatePasswords = () => {
+        const pass = newPasswordInput.value;
+        const confirm = confirmPasswordInput.value;
+        const matches = pass === confirm && pass.length >= 8;
+
+        if (pass.length > 0 && confirm.length > 0 && pass !== confirm) {
+            matchError?.classList.remove("hidden");
+        } else {
+            matchError?.classList.add("hidden");
+        }
+
+        submitResetBtn.disabled = !matches;
+    };
+
+    newPasswordInput?.addEventListener("input", validatePasswords);
+    confirmPasswordInput?.addEventListener("input", validatePasswords);
+
+    // Submit new password - tokens are handled server-side via cookies (no token props needed)
+    resetPasswordForm?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const password = newPasswordInput.value;
+
+        const { error } = await actions.updatePassword({ password });
+
+        if (error) {
+            (window as any).showToast("Error al actualizar la contraseña: " + error.message, "error");
+        } else {
+            (window as any).showToast("¡Contraseña actualizada con éxito!", "success");
+            closeModal();
+            window.location.replace("/"); // Clean redirect, removes query params from URL
+        }
+    });
+
+    closeLoginModalBtn?.addEventListener("click", closeModal);
+
+    const closeProfileBtn = document.getElementById("close-profile-btn");
+    closeProfileBtn?.addEventListener("click", () => {
+        closeModal();
+    });
+
+    loginBackdrop?.addEventListener("click", closeModal);
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeModal();
+    });
+
+    // Handle password toggles
+    document.querySelectorAll(".toggle-password-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const container = btn.closest(".relative");
+            const input = container?.querySelector(
+                "input",
+            ) as HTMLInputElement | null;
+            const eyeVisible = btn.querySelector(".eye-visible");
+            const eyeHidden = btn.querySelector(".eye-hidden");
+
+            if (input) {
+                const isPassword = input.type === "password";
+                input.type = isPassword ? "text" : "password";
+                eyeVisible?.classList.toggle("hidden", !isPassword);
+                eyeHidden?.classList.toggle("hidden", isPassword);
+            }
+        });
+    });
+
+    // On load: check server-side flags and auto-open modal if needed
+    window.addEventListener("DOMContentLoaded", () => {
+        // data-show-reset is set by the Astro frontmatter after a successful
+        // exchangeCodeForSession call — no tokens flow through the client.
+        const showReset = loginModal?.dataset.showReset === "true";
+
+        const hasLoginError =
+            !!document.getElementById("login-error-message") ||
+            !!document.getElementById("login-input-errors");
+        const hasRegisterState =
+            !!document.getElementById("register-success-message") ||
+            !!document.getElementById("register-error-message");
+
+        if (showReset) {
+            openModal();
+            slideTo(3);
+        } else if (hasLoginError) {
+            slideTo(0);
+            openModal();
+        } else if (hasRegisterState) {
+            slideTo(1);
+            openModal();
+        }
+
+        // Profile edit handlers
+        const editUsernameBtn = document.getElementById("edit-username-btn");
+        const usernameDisplay = document.getElementById(
+            "profile-username-display",
+        );
+        const usernameEdit = document.getElementById("profile-username-edit");
+        const usernameInput = document.getElementById(
+            "profile-username-input",
+        ) as HTMLInputElement;
+        const saveUsernameBtn = document.getElementById(
+            "save-username-btn",
+        ) as HTMLButtonElement;
+        const cancelUsernameBtn = document.getElementById(
+            "cancel-username-btn",
+        ) as HTMLButtonElement;
+
+        const editRoleBtn = document.getElementById(
+            "edit-role-btn",
+        ) as HTMLButtonElement;
+        const roleDisplay = document.getElementById("profile-role-display");
+        const roleEdit = document.getElementById("profile-role-edit");
+        const roleSelect = document.getElementById(
+            "profile-role-select",
+        ) as HTMLSelectElement;
+        const saveRoleBtn = document.getElementById(
+            "save-role-btn",
+        ) as HTMLButtonElement;
+        const cancelRoleBtn = document.getElementById(
+            "cancel-role-btn",
+        ) as HTMLButtonElement;
+
+        function cancelUsernameEdit() {
+            usernameEdit?.classList.add("hidden");
+            usernameDisplay?.classList.remove("hidden");
+            document
+                .querySelectorAll(".edit-btn")
+                .forEach((btn) => btn?.classList.remove("hidden"));
+        }
+
+        function cancelRoleEdit() {
+            roleEdit?.classList.add("hidden");
+            roleDisplay?.classList.remove("hidden");
+            document
+                .querySelectorAll(".edit-btn")
+                .forEach((btn) => btn?.classList.remove("hidden"));
+        }
+
+        editUsernameBtn?.addEventListener("click", () => {
+            usernameDisplay?.classList.add("hidden");
+            usernameEdit?.classList.remove("hidden");
+            document
+                .querySelectorAll(".edit-btn")
+                .forEach((btn) => btn?.classList.add("hidden"));
+            usernameInput?.focus();
+        });
+
+        saveUsernameBtn?.addEventListener("click", async () => {
+            const newUsername = usernameInput?.value.trim();
+            if (!newUsername) return;
+
+            saveUsernameBtn.disabled = true;
+            saveUsernameBtn.innerHTML = `<div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>`;
+
+            const { error } = await actions.updateProfile({
+                displayName: newUsername,
+            });
+
+            if (error) {
+                (window as any).showToast("Error al actualizar: " + error.message, "error");
+            } else {
+                if (usernameDisplay) {
+                    usernameDisplay.textContent = newUsername;
+                }
+                cancelUsernameEdit();
+            }
+
+            saveUsernameBtn.disabled = false;
+            saveUsernameBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+        });
+
+        cancelUsernameBtn?.addEventListener("click", cancelUsernameEdit);
+
+        usernameInput?.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                saveUsernameBtn?.click();
+            } else if (e.key === "Escape") {
+                cancelUsernameEdit();
+            }
+        });
+
+        usernameInput?.addEventListener("blur", () => {
+            setTimeout(() => {
+                if (!usernameEdit?.classList.contains("hidden")) {
+                    cancelUsernameEdit();
+                }
+            }, 100);
+        });
+
+        editRoleBtn?.addEventListener("click", () => {
+            roleDisplay?.classList.add("hidden");
+            roleEdit?.classList.remove("hidden");
+            document
+                .querySelectorAll(".edit-btn")
+                .forEach((btn) => btn?.classList.add("hidden"));
+            roleSelect?.focus();
+        });
+
+        saveRoleBtn?.addEventListener("click", async () => {
+            const newRole = roleSelect?.value as "editor" | "user";
+            if (!newRole) return;
+
+            saveRoleBtn.disabled = true;
+            saveRoleBtn.innerHTML = `<div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>`;
+
+            const { error } = await actions.updateRole({ role: newRole });
+
+            if (error) {
+                (window as any).showToast("Error al actualizar: " + error.message, "error");
+            } else {
+                if (roleDisplay) {
+                    roleDisplay.textContent = newRole;
+                }
+                cancelRoleEdit();
+                window.location.reload();
+            }
+
+            saveRoleBtn.disabled = false;
+            saveRoleBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+        });
+
+        cancelRoleBtn?.addEventListener("click", cancelRoleEdit);
+
+        roleSelect?.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+                cancelRoleEdit();
+            }
+        });
+
+        roleSelect?.addEventListener("blur", () => {
+            setTimeout(() => {
+                if (!roleEdit?.classList.contains("hidden")) {
+                    cancelRoleEdit();
+                }
+            }, 100);
+        });
+    });
+</script>

@@ -1,0 +1,53 @@
+---
+import Check from "@/src/assets/check.astro";
+---
+
+<div id="success-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <!-- Backdrop -->
+    <div
+        class="absolute inset-0 bg-primary/40 backdrop-blur-sm transition-opacity"
+    >
+    </div>
+
+    <!-- Modal Content -->
+    <div class="relative w-full max-w-md z-10">
+        <div
+            class="relative w-full transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all border-2 border-border animate-in fade-in zoom-in duration-300"
+        >
+            <button
+                id="close-success-modal-x"
+                type="button"
+                class="absolute top-4 right-4 w-8 h-8 rounded-full bg-primary text-white hover:bg-accent transition-colors z-10 flex items-center justify-center font-bold text-sm leading-none"
+                aria-label="Cerrar modal"
+            >
+                ✕
+            </button>
+
+            <div class="flex flex-col items-center gap-4 pt-4">
+                <div
+                    class="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center border-4 border-green-100"
+                >
+                    <Check class="w-10 h-10 text-green-500" strokeWidth={3} />
+                </div>
+
+                <div class="text-center">
+                    <h3 class="text-xl font-bold text-primary mb-2" id="success-modal-title">
+                        ¡Producto Guardado!
+                    </h3>
+                    <p class="text-secondary text-sm">
+                        El producto ha sido registrado exitosamente en el
+                        inventario.
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    id="close-success-modal"
+                    class="w-full mt-4 bg-primary hover:bg-accent text-white font-semibold py-2.5 rounded-lg transition-all duration-300 shadow-lg shadow-primary/10"
+                >
+                    Continuar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,582 @@
+---
+interface Producto {
+    id_producto: number;
+    id_tipo_producto: number;
+    precio_producto: string;
+    nombre_producto: string;
+    descripcion_producto: string;
+    id_proveedor: number;
+    activo_producto: boolean;
+    id_genero: number;
+}
+
+interface Props {
+    producto: Producto;
+    nombreGenero: string;
+    nombreCategoria: string;
+    imagenesUrls: string[];
+    isEditor?: boolean;
+}
+
+const { producto, nombreGenero, nombreCategoria, imagenesUrls, isEditor = false } = Astro.props;
+const mainImageUrl = imagenesUrls[0] || "";
+const otherImages = imagenesUrls.slice(1);
+
+const formatPrice = (price: string | number) => {
+    const numericPrice =
+        typeof price === "string"
+            ? parseFloat(price.replace(/\./g, ""))
+            : price;
+    if (isNaN(numericPrice)) return "$0";
+    return new Intl.NumberFormat("es-CO", {
+        style: "currency",
+        currency: "COP",
+        minimumFractionDigits: 0,
+    }).format(numericPrice);
+};
+import DownloadIcon from "@/src/assets/download.astro";
+import PowerIcon from "@/src/assets/power.astro";
+import CopyIcon from "@/src/assets/copy.astro";
+---
+
+<article
+    class="bg-surface border-2 border-border hover:border-primary rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative product-card"
+    data-id={producto.id_producto}
+    data-active={producto.activo_producto.toString()}
+    data-name={(producto.nombre_producto || "").toLowerCase()}
+>
+    <div class="relative overflow-hidden bg-gray-100 h-56 group/card-image">
+        <img
+            src={mainImageUrl}
+            alt=""
+            class={`w-full h-full object-cover group-hover:scale-105 transition-all duration-500 main-product-image ${!producto.activo_producto ? "grayscale blur-[1px] opacity-60" : ""}`}
+        />
+        <div
+            class="absolute inset-0 bg-black/5 group-hover:bg-transparent transition-colors duration-300"
+        >
+        </div>
+
+        {
+            otherImages.length > 0 && (
+                <div class="absolute bottom-3 right-3 flex flex-row-reverse items-center image-palette z-20">
+                    {otherImages
+                        .slice(0, 3)
+                        .reverse()
+                        .map((url, index) => (
+                            <div
+                                class="palette-thumb-container"
+                                style={`--rotation: ${-12 + index * 6}deg; --index: ${index};`}
+                            >
+                                <img
+                                    src={url}
+                                    alt=""
+                                    class="w-11 h-11 rounded-lg border-2 border-white shadow-lg object-cover transition-all duration-300 palette-thumb hover:scale-110 hover:z-50 cursor-pointer"
+                                />
+                            </div>
+                        ))}
+                    {otherImages.length > 3 && (
+                        <div class="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-bold flex items-center justify-center border border-white/20 mr-2 opacity-0 group-hover/card-image:opacity-100 transition-opacity">
+                            +{otherImages.length - 3}
+                        </div>
+                    )}
+                </div>
+            )
+        }
+
+        <button
+            class={`absolute top-4 left-4 text-[10px] font-black px-3 py-1.5 rounded-lg transition-all duration-300 z-10 flex items-center gap-2 border-2 bg-white/90 backdrop-blur-md text-primary border-primary/10 shadow-[0_4px_12px_rgba(0,0,0,0.1)] ${producto.activo_producto ? "hover:scale-105 active:scale-95 download-btn" : "opacity-50 cursor-not-allowed pointer-events-none"}`}
+            title="Descargar imágenes del producto"
+            data-images={JSON.stringify(imagenesUrls)}
+            data-name={producto.nombre_producto}
+        >
+            <DownloadIcon size={14} />
+            DESCARGAR
+        </button>
+
+        {
+            isEditor ? (
+                <button
+                    class={`absolute top-4 right-4 text-[10px] font-black px-3 py-1.5 rounded-lg transition-all duration-300 z-10 hover:scale-105 active:scale-95 status-toggle-btn flex items-center gap-2 border-2 ${
+                        producto.activo_producto
+                            ? "bg-green-500 text-white border-green-400 hover:bg-green-600 shadow-[0_4px_12px_rgba(34,197,94,0.3)]"
+                            : "bg-red-500 text-white border-red-400 hover:bg-red-600 shadow-[0_4px_12px_rgba(239,68,68,0.3)]"
+                    }`}
+                    title={producto.activo_producto
+                        ? "Desactivar producto"
+                        : "Activar producto"}
+                >
+                    <div
+                        class={`w-1.5 h-1.5 rounded-full animate-pulse ${producto.activo_producto ? "bg-white" : "bg-white/80"}`}
+                    >
+                    </div>
+                    {producto.activo_producto ? "ACTIVO" : "INACTIVO"}
+                </button>
+            ) : (
+                <span
+                    class={`absolute top-4 right-4 text-[10px] font-black px-3 py-1.5 rounded-lg z-10 flex items-center gap-2 border-2 pointer-events-none ${
+                        producto.activo_producto
+                            ? "bg-green-500 text-white border-green-400 shadow-[0_4px_12px_rgba(34,197,94,0.3)]"
+                            : "bg-red-500 text-white border-red-400 shadow-[0_4px_12px_rgba(239,68,68,0.3)]"
+                    }`}
+                >
+                    <div
+                        class={`w-1.5 h-1.5 rounded-full animate-pulse ${producto.activo_producto ? "bg-white" : "bg-white/80"}`}
+                    >
+                    </div>
+                    {producto.activo_producto ? "ACTIVO" : "INACTIVO"}
+                </span>
+            )
+        }
+    </div>
+
+    <div class="p-5 space-y-3">
+        {/* Nombre del Producto */}
+        <div
+            class={`group/copy relative -mx-2 px-2 py-1 rounded-lg transition-all duration-300 ${producto.activo_producto ? "copyable-section hover:bg-gray-100 cursor-copy" : ""}`}
+            data-copy-value={producto.nombre_producto}
+            data-copy-type="Nombre"
+        >
+            {
+                producto.activo_producto && (
+                    <span class="copy-badge absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/copy:opacity-100 group-hover/copy:translate-x-0 translate-x-2 transition-all duration-300 flex items-center justify-center bg-white/90 backdrop-blur-md border border-border shadow-sm p-1.5 rounded-md text-primary pointer-events-none z-10 w-7 h-7">
+                        <CopyIcon size={14} class="copy-badge-icon" />
+                    </span>
+                )
+            }
+            <h3
+                class={`text-xl font-bold transition-colors line-clamp-1 ${producto.activo_producto ? "text-primary group-hover:text-accent" : "text-text-muted"}`}
+            >
+                {producto.nombre_producto || "Nombre"}
+            </h3>
+        </div>
+
+        {/* Precio del Producto */}
+        <div
+            class={`group/copy relative -mx-2 px-2 py-1 rounded-lg transition-all duration-300 ${producto.activo_producto ? "copyable-section hover:bg-gray-100 cursor-copy" : ""}`}
+            data-copy-value={formatPrice(producto.precio_producto)}
+            data-copy-type="Precio"
+        >
+            {
+                producto.activo_producto && (
+                    <span class="copy-badge absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/copy:opacity-100 group-hover/copy:translate-x-0 translate-x-2 transition-all duration-300 flex items-center justify-center bg-white/90 backdrop-blur-md border border-border shadow-sm p-1.5 rounded-md text-primary pointer-events-none z-10 w-7 h-7">
+                        <CopyIcon size={14} class="copy-badge-icon" />
+                    </span>
+                )
+            }
+            <p
+                class={`text-2xl font-black ${producto.activo_producto ? "text-primary" : "text-text-muted opacity-60"}`}
+            >
+                {formatPrice(producto.precio_producto)}
+            </p>
+        </div>
+
+        {/* Descripción del Producto */}
+        <div
+            class={`group/copy relative -mx-2 px-2 py-1 rounded-lg transition-all duration-300 ${producto.activo_producto ? "copyable-section hover:bg-gray-100 cursor-copy" : ""}`}
+            data-copy-value={producto.descripcion_producto}
+            data-copy-type="Descripción"
+        >
+            {
+                producto.activo_producto && (
+                    <span class="copy-badge absolute right-2 top-2 opacity-0 group-hover/copy:opacity-100 group-hover/copy:translate-x-0 translate-x-2 transition-all duration-300 flex items-center justify-center bg-white/90 backdrop-blur-md border border-border shadow-sm p-1.5 rounded-md text-primary pointer-events-none z-10 w-7 h-7">
+                        <CopyIcon size={14} class="copy-badge-icon" />
+                    </span>
+                )
+            }
+            <p class="text-sm text-text-muted line-clamp-2 min-h-10">
+                {producto.descripcion_producto || "Sin descripción disponible"}
+            </p>
+        </div>
+        <div
+            class="pt-3 flex items-center justify-between border-t border-border/50"
+        >
+            <span
+                class="text-[10px] uppercase tracking-wider font-bold bg-gray-100 text-text-muted px-2 py-1 rounded"
+            >
+                {nombreGenero}
+                {" "}׀{" "}
+                {nombreCategoria}
+            </span>
+            <button
+                class={`font-bold text-sm transition-all flex items-center gap-1.5 copy-btn ${producto.activo_producto ? "text-primary hover:text-accent hover:scale-105 active:scale-95" : "text-text-muted opacity-50 cursor-not-allowed pointer-events-none"}`}
+                data-nombre={producto.nombre_producto}
+                data-descripcion={producto.descripcion_producto}
+                data-precio={formatPrice(producto.precio_producto)}
+                data-categoria={nombreCategoria}
+                data-genero={nombreGenero}
+            >
+                <CopyIcon size={16} class="copy-icon" />
+                <span class="copy-text">Copiar</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal Overlay -->
+    <div
+        class="confirmation-overlay fixed inset-0 z-10000 p-4 hidden items-center justify-center transition-all duration-300 pointer-events-none"
+    >
+        <!-- Visual Backdrop (Non-blocking for hover) -->
+        <div
+            class="absolute inset-0 bg-primary/40 backdrop-blur-sm opacity-0 transition-opacity duration-300 pointer-events-none modal-backdrop-visual"
+        >
+        </div>
+
+        <!-- Modal Content -->
+        <div class="relative w-full max-w-sm z-10">
+            <section
+                class="relative bg-surface border-2 border-border rounded-2xl p-8 w-full shadow-2xl scale-90 opacity-0 transition-all duration-300 modal-content pointer-events-auto"
+            >
+                <button
+                    type="button"
+                    class="absolute top-4 right-4 w-8 h-8 rounded-full bg-primary text-white hover:bg-accent transition-colors z-10 flex items-center justify-center font-bold text-sm leading-none cancel-btn-x"
+                    aria-label="Cerrar modal"
+                >
+                    ✕
+                </button>
+
+                <article
+                    class={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${producto.activo_producto ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"}`}
+                >
+                    <PowerIcon class="w-8 h-8" active={producto.activo_producto} />
+                </article>
+                <h4 class="text-xl font-black text-primary text-center mb-2">
+                    Confirmar Acción
+                </h4>
+                <p class="text-text-muted text-center text-sm mb-8">
+                    ¿Estás seguro de que deseas <span
+                        class="action-text font-bold uppercase underline"></span> este
+                    producto?
+                </p>
+                <div class="grid grid-cols-2 gap-4">
+                    <button
+                        class="px-3 py-2 text-[11px] font-bold text-text-muted bg-gray-100 hover:bg-gray-200 rounded-lg transition-all cancel-btn"
+                    >
+                        CANCELAR
+                    </button>
+                    <button
+                        class={`px-3 py-2 text-[11px] font-bold text-white rounded-lg transition-all confirm-btn shadow-lg ${producto.activo_producto ? "bg-primary hover:bg-accent" : "bg-primary hover:bg-accent"}`}
+                    >
+                        CONFIRMAR
+                    </button>
+                </div>
+            </section>
+        </div>
+    </div>
+</article>
+
+<script>
+    import { actions } from "astro:actions";
+    import { downloadImagesAsZip } from "../lib/zip";
+
+    // Global state registry
+    if (!(window as any).activeModalRegistry) {
+        (window as any).activeModalRegistry = {
+            currentId: null,
+            closeAll: () => {
+                window.dispatchEvent(
+                    new CustomEvent("close-all-modals-internal"),
+                );
+            },
+        };
+
+        // Close on escape
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape")
+                (window as any).activeModalRegistry.closeAll();
+        });
+
+        // Global click to close
+        document.addEventListener("click", (e) => {
+            const registry = (window as any).activeModalRegistry;
+            if (registry.currentId !== null) {
+                const target = e.target as HTMLElement;
+                // If not clicking inside a modal content and not clicking a toggle button
+                if (
+                    !target.closest(".modal-content") &&
+                    !target.closest(".status-toggle-btn")
+                ) {
+                    registry.closeAll();
+                }
+            }
+        });
+    }
+
+    function initCard(article: HTMLElement) {
+        const toggleBtn = article.querySelector(".status-toggle-btn");
+        const overlay = article.querySelector(
+            ".confirmation-overlay",
+        ) as HTMLElement;
+        const backdropVisual = article.querySelector(
+            ".modal-backdrop-visual",
+        ) as HTMLElement;
+        const modalContent = article.querySelector(
+            ".modal-content",
+        ) as HTMLElement;
+        const cancelBtn = article.querySelector(".cancel-btn");
+        const cancelBtnX = article.querySelector(".cancel-btn-x");
+        const confirmBtn = article.querySelector(".confirm-btn");
+        const actionText = article.querySelector(".action-text");
+
+        if (
+            !toggleBtn ||
+            !overlay ||
+            !backdropVisual ||
+            !modalContent ||
+            !cancelBtn ||
+            !cancelBtnX ||
+            !confirmBtn ||
+            !actionText
+        )
+            return;
+
+        modalContent.onclick = (e) => e.stopPropagation();
+        const id = parseInt(article.dataset.id || "0");
+        const registry = (window as any).activeModalRegistry;
+
+        const showModal = (e: Event) => {
+            if (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            if (article.dataset.modalOpen === "true") return;
+
+            // Close any other modal
+            registry.closeAll();
+            registry.currentId = id;
+
+            const isActive = article.dataset.active === "true";
+            actionText.textContent = isActive ? "desactivar" : "activar";
+
+            // Lock transform to current state (-4px usually) to stop flickering
+            article.style.transform = "translateY(-4px)";
+            article.classList.add("modal-is-active");
+
+            overlay.classList.remove("hidden");
+            overlay.classList.add("flex");
+
+            requestAnimationFrame(() => {
+                backdropVisual.classList.remove("opacity-0");
+                backdropVisual.classList.add("opacity-100");
+                modalContent.classList.remove("opacity-0", "scale-90");
+                modalContent.classList.add("opacity-100", "scale-100");
+            });
+
+            document.body.style.overflow = "hidden";
+            article.dataset.modalOpen = "true";
+        };
+
+        const hideModal = (e?: Event) => {
+            if (e) e.stopPropagation();
+            if (article.dataset.modalOpen !== "true") return;
+
+            // Clear active ID immediately to allow other interactions
+            if (registry.currentId === id) registry.currentId = null;
+            article.dataset.modalOpen = "false";
+
+            backdropVisual.classList.remove("opacity-100");
+            backdropVisual.classList.add("opacity-0");
+            modalContent.classList.remove("opacity-100", "scale-100");
+            modalContent.classList.add("opacity-0", "scale-90");
+
+            setTimeout(() => {
+                overlay.classList.add("hidden");
+                overlay.classList.remove("flex");
+                article.classList.remove("modal-is-active");
+                article.style.transform = "";
+
+                if (
+                    !document.querySelector(
+                        ".confirmation-overlay:not(.hidden)",
+                    )
+                ) {
+                    document.body.style.overflow = "";
+                }
+            }, 300);
+        };
+
+        const handleToggle = async (e: Event) => {
+            e.stopPropagation();
+            const currentActive = article.dataset.active === "true";
+            const newActive = !currentActive;
+
+            confirmBtn.textContent = "Guardando...";
+            (confirmBtn as HTMLButtonElement).disabled = true;
+
+            try {
+                await actions.toggleProductStatus({
+                    id_producto: id,
+                    activo: newActive,
+                });
+                window.location.reload();
+            } catch (err) {
+                console.error("Unexpected error:", err);
+                hideModal();
+                confirmBtn.textContent = "CONFIRMAR";
+                (confirmBtn as HTMLButtonElement).disabled = false;
+            }
+        };
+
+        toggleBtn.addEventListener("click", showModal);
+        cancelBtn.addEventListener("click", hideModal);
+        cancelBtnX.addEventListener("click", hideModal);
+        confirmBtn.addEventListener("click", handleToggle);
+
+        // Download functionality
+        const downloadBtn = article.querySelector(
+            ".download-btn",
+        ) as HTMLElement;
+        if (downloadBtn) {
+            downloadBtn.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                if (
+                    downloadBtn.classList.contains("opacity-50") ||
+                    downloadBtn.textContent?.includes("...")
+                )
+                    return;
+
+                const originalText = downloadBtn.innerHTML;
+                downloadBtn.innerHTML = `
+                <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+                CARGANDO...`;
+                downloadBtn.style.pointerEvents = "none";
+
+                try {
+                    const imagesStr = downloadBtn.dataset.images;
+                    const productName = downloadBtn.dataset.name || "producto";
+                    if (!imagesStr) throw new Error("No images");
+
+                    const urls: string[] = JSON.parse(imagesStr);
+                    if (urls.length === 0) throw new Error("No images");
+
+                    await downloadImagesAsZip(urls, productName);
+                } catch (err) {
+                    console.error("Error creating zip", err);
+                    (window as any).showToast("Hubo un error al crear el archivo ZIP", "error");
+                } finally {
+                    downloadBtn.innerHTML = originalText;
+                    downloadBtn.style.pointerEvents = "auto";
+                }
+            });
+        }
+
+        // Individual section copy functionality
+        const copyableSections = article.querySelectorAll(".copyable-section");
+        copyableSections.forEach((section) => {
+            section.addEventListener("click", async (e) => {
+                const isActive = article.dataset.active === "true";
+                if (!isActive) return;
+
+                e.stopPropagation();
+                const value = (section as HTMLElement).dataset.copyValue;
+                const type = (section as HTMLElement).dataset.copyType;
+
+                if (!value) return;
+
+                try {
+                    await navigator.clipboard.writeText(value);
+
+                    const badge = section.querySelector(".copy-badge");
+                    const badgeIcon = section.querySelector(".copy-badge-icon");
+
+                    if (badge && badgeIcon) {
+                        const originalIcon = badgeIcon.innerHTML;
+
+                        badgeIcon.innerHTML =
+                            '<path d="M20 6L9 17l-5-5"></path>';
+
+                        badge.classList.add(
+                            "!bg-green-500",
+                            "!text-white",
+                            "!border-green-600",
+                        );
+
+                        setTimeout(() => {
+                            badgeIcon.innerHTML = originalIcon;
+                            badge.classList.remove(
+                                "!bg-green-500",
+                                "!text-white",
+                                "!border-green-600",
+                            );
+                        }, 2000);
+                    }
+                } catch (err) {
+                    console.error(`Error al copiar ${type}:`, err);
+                }
+            });
+        });
+
+        // Image palette logic
+        const mainImg = article.querySelector(
+            ".main-product-image",
+        ) as HTMLImageElement;
+        const thumbs = article.querySelectorAll(
+            ".palette-thumb",
+        ) as NodeListOf<HTMLImageElement>;
+
+        thumbs.forEach((thumb) => {
+            thumb.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const oldMainSrc = mainImg.src;
+                mainImg.src = thumb.src;
+                thumb.src = oldMainSrc;
+
+                // Opacity feedback
+                mainImg.style.opacity = "0.5";
+                setTimeout(() => {
+                    mainImg.style.opacity = "1";
+                }, 100);
+            });
+        });
+
+        // Listen for internal close all event
+        window.addEventListener("close-all-modals-internal", () => {
+            if (article.dataset.modalOpen === "true") hideModal();
+        });
+    }
+
+    // Initialize all product cards
+    document.querySelectorAll(".product-card").forEach((el) => {
+        initCard(el as HTMLElement);
+    });
+</script>
+
+<style>
+    /* Ensure the card currently showing its modal stays on top */
+    .product-card.modal-is-active {
+        z-index: 10001 !important;
+        /* Transform is managed via inline JS to lock position */
+        /* background-color: var(--surface); */
+    }
+
+    .image-palette {
+        pointer-events: auto;
+    }
+
+    .palette-thumb-container {
+        margin-left: -24px;
+        transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transform: rotate(var(--rotation));
+        z-index: var(--index);
+    }
+
+    .group\/card-image:hover .palette-thumb-container {
+        margin-left: 6px;
+        transform: rotate(0deg) translateY(-8px);
+    }
+
+    .palette-thumb {
+        background-color: white;
+    }
+
+    .copyable-section {
+        border: 1px dashed transparent;
+    }
+
+    .copyable-section:hover {
+        border-color: var(--color-border);
+    }
+
+    .copy-badge {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+</style>
