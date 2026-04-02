@@ -8,7 +8,7 @@ export const serverActions = {
         }),
         handler: async ({ text, files }) => {
             try {
-                const res = await fetch("http://localhost:1234/mensajes", {
+                const res = await fetch("http://localhost:1234/chat", {
                     method: "POST",
                     body: JSON.stringify({ message:text, images:files }),
                     headers: {
