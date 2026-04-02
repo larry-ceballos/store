@@ -16,7 +16,7 @@ export const sessionActions = {
             let email = inputEmail;
             
             if (!inputEmail.includes("@")) {
-                const { data: usersData, error: usersError } = await supabase.auth.listUsers();
+                const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers();
                 
                 if (usersError) {
                     return {
@@ -232,7 +232,7 @@ export const sessionActions = {
             });
 
             const { error } = await supabase.auth.updateUser({
-                user_metadata: { displayName }
+                data: { displayName }
             });
 
             if (error) {
@@ -256,8 +256,8 @@ export const sessionActions = {
             const { role } = input;
             const accessToken = context.cookies.get("sb-access-token")?.value;
             const refreshToken = context.cookies.get("sb-refresh-token")?.value;
-
-            if (!accessToken || !refreshToken) {
+            const userId = context.cookies.get("sb-user-id")?.value || "";
+            if (!accessToken || !refreshToken || !userId) {
                 return {
                     success: false,
                     error: { message: "Sesión no encontrada o expirada." }
@@ -269,9 +269,10 @@ export const sessionActions = {
                 refresh_token: refreshToken,
             });
 
-            const { error } = await supabase.auth.updateUser({
-                app_metadata: { role }
-            });
+            const { error } = await supabase.auth.admin.updateUserById(
+                userId,
+                { app_metadata: { role } }
+            );
 
             if (error) {
                 return {
