@@ -27,6 +27,7 @@ if (accessToken && refreshToken) {
         
         if (!sessionError && sessionData.user) {
             user = sessionData.user;
+            Astro.cookies.set("sb-user-id", user.id || "");
             // Verificamos el rol si es necesario (puedes ajustar el nombre del rol según tu DB)
             // Por ahora permitimos si tiene sesión, pero marcamos el error si no tiene el rol 'admin'
             // (Si aún no tienes roles, este check se puede omitir o ajustar)
@@ -519,825 +520,831 @@ if (isAuthorized) {
 
 <script>
     import { actions } from "astro:actions";
+    (()=>{
 
-    const MAX_IMAGES = 5;
-    const MAX_SIZE_MB = 5;
-    const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-    let imageFiles: File[] = [];
-    let blobUrls: string[] = [];
+        const MAX_IMAGES = 5;
+        const MAX_SIZE_MB = 5;
+        const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+        let imageFiles: File[] = [];
+        let blobUrls: string[] = [];
 
-    const dropZone = document.getElementById(
-        "image-drop-zone",
-    ) as HTMLDivElement;
-    const fileInput = document.getElementById(
-        "image-input",
-    ) as HTMLInputElement;
-    const previewContainer = document.getElementById(
-        "image-preview",
-    ) as HTMLDivElement;
-    const uploadPrompt = document.getElementById(
-        "upload-prompt",
-    ) as HTMLDivElement;
-    const limitMessage = document.getElementById(
-        "limit-message",
-    ) as HTMLDivElement;
-    const counter = document.getElementById("image-counter") as HTMLSpanElement;
-    const messagesContainer = document.getElementById(
-        "image-messages",
-    ) as HTMLDivElement;
-
-    // Elementos del modal de duplicados
-    const duplicateModal = document.getElementById(
-        "duplicate-modal",
-    ) as HTMLDivElement;
-    const duplicateMessage = document.getElementById(
-        "duplicate-message",
-    ) as HTMLParagraphElement;
-    const duplicateImagesPreview = document.getElementById(
-        "duplicate-images-preview",
-    ) as HTMLDivElement;
-    const closeDuplicateModal = document.getElementById(
-        "close-duplicate-modal",
-    ) as HTMLButtonElement;
-
-    // Elementos de carga y éxito
-    const loadingBar = document.getElementById("loading-bar") as HTMLDivElement;
-    const successModal = document.getElementById(
-        "success-modal",
-    ) as HTMLDivElement;
-    const closeSuccessModal = document.getElementById(
-        "close-success-modal",
-    ) as HTMLButtonElement;
-    const closeSuccessModalX = document.getElementById(
-        "close-success-modal-x",
-    ) as HTMLButtonElement;
-    const closeDuplicateModalX = document.getElementById(
-        "close-duplicate-modal-x",
-    ) as HTMLButtonElement;
-    const submitBtn = document.getElementById(
-        "submit-btn",
-    ) as HTMLButtonElement;
-    const submitText = document.getElementById(
-        "submit-text",
-    ) as HTMLSpanElement;
-    const submitSpinner = document.getElementById(
-        "submit-spinner",
-    ) as HTMLDivElement;
-
-    // Contenedores de error por campo
-    const nombreError = document.getElementById(
-        "nombre-error",
-    ) as HTMLDivElement;
-    const precioError = document.getElementById(
-        "precio-error",
-    ) as HTMLDivElement;
-    const generoError = document.getElementById(
-        "genero-error",
-    ) as HTMLDivElement;
-    const categoriaError = document.getElementById(
-        "categoria-error",
-    ) as HTMLDivElement;
-    const proveedorError = document.getElementById(
-        "proveedor-error",
-    ) as HTMLDivElement;
-    const descripcionError = document.getElementById(
-        "descripcion-error",
-    ) as HTMLDivElement;
-    const charCounter = document.getElementById(
-        "char-counter",
-    ) as HTMLSpanElement;
-    const descriptionTextarea = document.getElementById(
-        "descripcion",
-    ) as HTMLTextAreaElement;
-    const precioInput = document.getElementById("precio") as HTMLInputElement;
-
-    precioInput?.addEventListener("input", (e) => {
-        const input = e.target as HTMLInputElement;
-        let value = input.value.replace(/[^\d]/g, "");
-        if (value) {
-            value = parseInt(value, 10).toLocaleString("es-CO");
-        }
-        input.value = value;
-    });
-
-    const activeMessages = new Map<
-        HTMLElement,
-        ReturnType<typeof setTimeout>
-    >();
-
-    const hideDuplicateModal = () => {
-        duplicateModal.classList.add("hidden");
-        duplicateModal.classList.remove("flex");
-        document.body.style.overflow = "auto";
-    };
-
-    closeDuplicateModal?.addEventListener("click", hideDuplicateModal);
-    closeDuplicateModalX?.addEventListener("click", hideDuplicateModal);
-
-    const hideSuccessModal = () => {
-        successModal.classList.add("hidden");
-        successModal.classList.remove("flex");
-        document.body.style.overflow = "auto";
-        // Opcional: limpiar el formulario aquí si se desea
-        form.reset();
-        imageFiles = [];
-        renderPreviews();
-        updateUI();
-        charCounter.textContent = "0/200";
-        charCounter.classList.add("bg-gray-100", "text-text-muted");
-        charCounter.classList.remove("bg-red-100", "text-red-600");
-
-        // Reset button state
-        submitBtn.disabled = false;
-        submitText.textContent = "Agregar Producto";
-    };
-
-    closeSuccessModal?.addEventListener("click", hideSuccessModal);
-    closeSuccessModalX?.addEventListener("click", hideSuccessModal);
-
-    function showMessage(
-        text: string,
-        type: "error" | "warning",
-        container: HTMLElement = messagesContainer,
-    ) {
-        if (activeMessages.has(container)) {
-            clearTimeout(activeMessages.get(container));
-        }
-        container.innerHTML = "";
-
-        const input = container.previousElementSibling as
-            | HTMLInputElement
-            | HTMLSelectElement
-            | HTMLTextAreaElement;
-        if (
-            input &&
-            (input.tagName === "INPUT" ||
-                input.tagName === "SELECT" ||
-                input.tagName === "TEXTAREA")
-        ) {
-            input.classList.add(
-                type === "error" ? "!border-red-500" : "!border-amber-500",
-            );
-            input.classList.remove("border-border", "focus:ring-primary");
-        }
-
-        const div = document.createElement("div");
-        div.className = `flex items-center gap-1.5 px-2 py-1 rounded text-[11px] leading-tight ${type === "error" ? "text-red-600" : "text-amber-600"}`;
-        div.innerHTML = `
-            <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${type === "error" ? "M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" : "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"}"></path>
-            </svg>
-            <span class="truncate">${text}</span>
-        `;
-
-        container.appendChild(div);
-
-        const timeout = setTimeout(() => {
-            div.style.opacity = "0";
-            div.style.transition = "opacity 0.3s";
-            setTimeout(() => {
-                div.remove();
-                activeMessages.delete(container);
-                if (
-                    input &&
-                    (input.tagName === "INPUT" ||
-                        input.tagName === "SELECT" ||
-                        input.tagName === "TEXTAREA")
-                ) {
-                    input.classList.remove(
-                        "!border-red-500",
-                        "!border-amber-500",
-                    );
-                    input.classList.add("border-border", "focus:ring-primary");
-                }
-            }, 300);
-        }, 4000);
-        activeMessages.set(container, timeout);
-    }
-
-    function dismissMessage(container: HTMLElement = messagesContainer) {
-        if (activeMessages.has(container)) {
-            clearTimeout(activeMessages.get(container));
-            activeMessages.delete(container);
-        }
-        const input = container.previousElementSibling as
-            | HTMLInputElement
-            | HTMLSelectElement
-            | HTMLTextAreaElement;
-        if (
-            input &&
-            (input.tagName === "INPUT" ||
-                input.tagName === "SELECT" ||
-                input.tagName === "TEXTAREA")
-        ) {
-            input.classList.remove("!border-red-500", "!border-amber-500");
-            input.classList.add("border-border", "focus:ring-primary");
-        }
-        container.innerHTML = "";
-    }
-
-    function updateUI() {
-        counter.textContent = `${imageFiles.length}/${MAX_IMAGES}`;
-
-        if (imageFiles.length >= MAX_IMAGES) {
-            uploadPrompt.classList.add("hidden");
-            limitMessage.classList.remove("hidden");
-            dropZone.classList.remove("hover:border-primary");
-            dropZone.classList.add("border-amber-400", "bg-amber-50");
-            fileInput.disabled = true;
-        } else {
-            uploadPrompt.classList.remove("hidden");
-            limitMessage.classList.add("hidden");
-            dropZone.classList.add("hover:border-primary");
-            dropZone.classList.remove("border-amber-400", "bg-amber-50");
-            fileInput.disabled = false;
-        }
-    }
-
-    function renderPreviews() {
-        blobUrls.forEach((url) => URL.revokeObjectURL(url));
-        blobUrls = [];
-        previewContainer.innerHTML = "";
-
-        imageFiles.forEach((file, index) => {
-            const blobUrl = URL.createObjectURL(file);
-            blobUrls.push(blobUrl);
-
-            const div = document.createElement("div");
-            div.className =
-                "relative group aspect-square rounded-lg overflow-hidden border border-border bg-gray-100";
-
-            const img = document.createElement("img");
-            img.src = blobUrl;
-            img.className = "w-full h-full object-cover";
-            img.onerror = () => {
-                URL.revokeObjectURL(blobUrl);
-                blobUrls = blobUrls.filter((url) => url !== blobUrl);
-                imageFiles.splice(index, 1);
-                showMessage(
-                    `La imagen "${file.name}" esta dañada o no se puede leer`,
-                    "error",
-                );
-                renderPreviews();
-                updateUI();
-            };
-
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className =
-                "absolute top-1 right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity";
-            btn.innerHTML = `<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                URL.revokeObjectURL(blobUrl);
-                blobUrls = blobUrls.filter((url) => url !== blobUrl);
-                imageFiles.splice(index, 1);
-                renderPreviews();
-                updateUI();
-            };
-
-            const badge = document.createElement("span");
-            badge.className =
-                "absolute bottom-1 left-1 bg-primary/80 text-white text-[10px] px-1.5 py-0.5 rounded";
-            badge.textContent = `${index + 1}`;
-
-            div.appendChild(img);
-            div.appendChild(btn);
-            div.appendChild(badge);
-            previewContainer.appendChild(div);
-        });
-    }
-
-    function addImages(files: FileList | null) {
-        if (!files) return;
-        dismissMessage(messagesContainer);
-
-        Array.from(files).forEach((file) => {
-            if (imageFiles.length >= MAX_IMAGES) return;
-
-            if (!ALLOWED_TYPES.includes(file.type)) {
-                showMessage(
-                    `"${file.name}" no es un formato valido (usa JPG, PNG o WebP)`,
-                    "error",
-                );
-                return;
-            }
-
-            if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-                showMessage(
-                    `"${file.name}" supera los ${MAX_SIZE_MB}MB`,
-                    "error",
-                );
-                return;
-            }
-
-            const exists = imageFiles.some(
-                (f) => f.name === file.name && f.size === file.size,
-            );
-            if (exists) {
-                showMessage(`"${file.name}" ya fue agregada`, "warning");
-                return;
-            }
-
-            imageFiles.push(file);
-        });
-
-        renderPreviews();
-        updateUI();
-    }
-
-    dropZone.addEventListener("click", () => {
-        if (imageFiles.length < MAX_IMAGES) {
-            fileInput.click();
-        }
-    });
-
-    dropZone.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        if (imageFiles.length < MAX_IMAGES) {
-            dropZone.classList.add("border-primary", "bg-primary/5");
-        }
-    });
-
-    dropZone.addEventListener("dragleave", (e) => {
-        e.preventDefault();
-        dropZone.classList.remove("border-primary", "bg-primary/5");
-    });
-
-    dropZone.addEventListener("drop", (e) => {
-        e.preventDefault();
-        dropZone.classList.remove("border-primary", "bg-primary/5");
-        addImages(e.dataTransfer?.files || null);
-    });
-
-    fileInput.addEventListener("change", () => addImages(fileInput.files));
-
-    updateUI();
-
-    (function initCategoriaNueva() {
-        const container = document.getElementById(
-            "categoria-container",
+        const dropZone = document.getElementById(
+            "image-drop-zone",
         ) as HTMLDivElement;
-        const select = document.getElementById(
-            "categoria",
-        ) as HTMLSelectElement;
-        const selectWrapper = document.getElementById(
-            "categoria-select-wrapper",
-        ) as HTMLDivElement;
-        const inputWrapper = document.getElementById(
-            "categoria-input-wrapper",
-        ) as HTMLDivElement;
-        const nuevaBtn = document.getElementById(
-            "categoria-nueva-btn",
-        ) as HTMLButtonElement;
-        const input = document.getElementById(
-            "categoria-input",
+        const fileInput = document.getElementById(
+            "image-input",
         ) as HTMLInputElement;
-        const aceptarBtn = document.getElementById(
-            "categoria-aceptar",
-        ) as HTMLButtonElement;
-        const cancelarBtn = document.getElementById(
-            "categoria-cancelar",
-        ) as HTMLButtonElement;
-        const spinner = document.getElementById(
-            "categoria-spinner",
+        const previewContainer = document.getElementById(
+            "image-preview",
+        ) as HTMLDivElement;
+        const uploadPrompt = document.getElementById(
+            "upload-prompt",
+        ) as HTMLDivElement;
+        const limitMessage = document.getElementById(
+            "limit-message",
+        ) as HTMLDivElement;
+        const counter = document.getElementById("image-counter") as HTMLSpanElement;
+        const messagesContainer = document.getElementById(
+            "image-messages",
         ) as HTMLDivElement;
 
-        let isSubmitting = false;
+        // Elementos del modal de duplicados
+        const duplicateModal = document.getElementById(
+            "duplicate-modal",
+        ) as HTMLDivElement;
+        const duplicateMessage = document.getElementById(
+            "duplicate-message",
+        ) as HTMLParagraphElement;
+        const duplicateImagesPreview = document.getElementById(
+            "duplicate-images-preview",
+        ) as HTMLDivElement;
+        const closeDuplicateModal = document.getElementById(
+            "close-duplicate-modal",
+        ) as HTMLButtonElement;
 
-        const handleOutsideClick = (e: MouseEvent) => {
-            if (isSubmitting) return;
-            if (!container.contains(e.target as Node)) {
-                cancelarBtn.click();
+        // Elementos de carga y éxito
+        const loadingBar = document.getElementById("loading-bar") as HTMLDivElement;
+        const successModal = document.getElementById(
+            "success-modal",
+        ) as HTMLDivElement;
+        const closeSuccessModal = document.getElementById(
+            "close-success-modal",
+        ) as HTMLButtonElement;
+        const closeSuccessModalX = document.getElementById(
+            "close-success-modal-x",
+        ) as HTMLButtonElement;
+        const closeDuplicateModalX = document.getElementById(
+            "close-duplicate-modal-x",
+        ) as HTMLButtonElement;
+        const submitBtn = document.getElementById(
+            "submit-btn",
+        ) as HTMLButtonElement;
+        const submitText = document.getElementById(
+            "submit-text",
+        ) as HTMLSpanElement;
+        const submitSpinner = document.getElementById(
+            "submit-spinner",
+        ) as HTMLDivElement;
+
+        // Contenedores de error por campo
+        const nombreError = document.getElementById(
+            "nombre-error",
+        ) as HTMLDivElement;
+        const precioError = document.getElementById(
+            "precio-error",
+        ) as HTMLDivElement;
+        const generoError = document.getElementById(
+            "genero-error",
+        ) as HTMLDivElement;
+        const categoriaError = document.getElementById(
+            "categoria-error",
+        ) as HTMLDivElement;
+        const proveedorError = document.getElementById(
+            "proveedor-error",
+        ) as HTMLDivElement;
+        const descripcionError = document.getElementById(
+            "descripcion-error",
+        ) as HTMLDivElement;
+        const charCounter = document.getElementById(
+            "char-counter",
+        ) as HTMLSpanElement;
+        const descriptionTextarea = document.getElementById(
+            "descripcion",
+        ) as HTMLTextAreaElement;
+        const precioInput = document.getElementById("precio") as HTMLInputElement;
+
+        if(!dropZone || !fileInput || !previewContainer || !uploadPrompt || !limitMessage || !counter || !messagesContainer) {
+            // console.error("No se encontraron los elementos necesarios para la funcionalidad de imágenes.");
+            return
+        }
+        precioInput?.addEventListener("input", (e) => {
+            const input = e.target as HTMLInputElement;
+            let value = input.value.replace(/[^\d]/g, "");
+            if (value) {
+                value = parseInt(value, 10).toLocaleString("es-CO");
             }
+            input.value = value;
+        });
+
+        const activeMessages = new Map<
+            HTMLElement,
+            ReturnType<typeof setTimeout>
+        >();
+
+        const hideDuplicateModal = () => {
+            duplicateModal.classList.add("hidden");
+            duplicateModal.classList.remove("flex");
+            document.body.style.overflow = "auto";
         };
 
-        nuevaBtn.addEventListener("click", () => {
-            selectWrapper.classList.add("hidden");
-            inputWrapper.classList.remove("hidden");
-            nuevaBtn.classList.add("hidden");
-            input.focus();
-            document.addEventListener("mousedown", handleOutsideClick);
-        });
+        closeDuplicateModal?.addEventListener("click", hideDuplicateModal);
+        closeDuplicateModalX?.addEventListener("click", hideDuplicateModal);
 
-        aceptarBtn.addEventListener("click", async () => {
-            const nuevaCategoria = input.value.trim();
-            if (nuevaCategoria) {
-                isSubmitting = true;
-                input.disabled = true;
-                aceptarBtn.disabled = true;
-                aceptarBtn.classList.add("hidden");
-                spinner.classList.remove("hidden");
-
-                const { data, error } = await actions.addCategory({
-                    nombre: nuevaCategoria,
-                });
-
-                // Si se canceló mientras cargaba (aunqueisSubmitting previene esto parcialmente)
-                // el estado se reseteará en cancelarBtn.click()
-
-                if (!isSubmitting) return; // Ya se canceló
-
-                if (error) {
-                    console.error("Error al agregar categoria:", error);
-                    isSubmitting = false;
-                    input.disabled = false;
-                    aceptarBtn.disabled = false;
-                    aceptarBtn.classList.remove("hidden");
-                    spinner.classList.add("hidden");
-                    return;
-                }
-
-                if (data) {
-                    const option = document.createElement("option");
-                    option.value = data.id_tipo_producto.toString();
-                    option.textContent = data.nombre_tipo_producto;
-                    select.appendChild(option);
-                    select.value = data.id_tipo_producto.toString();
-                }
-            }
-            resetState();
-        });
-
-        function resetState() {
-            isSubmitting = false;
-            input.value = "";
-            input.disabled = false;
-            aceptarBtn.disabled = false;
-            aceptarBtn.classList.remove("hidden");
-            spinner.classList.add("hidden");
-            inputWrapper.classList.add("hidden");
-            selectWrapper.classList.remove("hidden");
-            nuevaBtn.classList.remove("hidden");
-            document.removeEventListener("mousedown", handleOutsideClick);
-        }
-
-        cancelarBtn.addEventListener("click", () => {
-            resetState();
-        });
-
-        input.addEventListener("keydown", (e) => {
-            if (isSubmitting) return;
-            if (e.key === "Enter") {
-                e.preventDefault();
-                aceptarBtn.click();
-            } else if (e.key === "Escape") {
-                cancelarBtn.click();
-            }
-        });
-    })();
-
-    (function initProveedorNuevo() {
-        const container = document.getElementById(
-            "proveedor-container",
-        ) as HTMLDivElement;
-        const select = document.getElementById(
-            "proveedor",
-        ) as HTMLSelectElement;
-        const selectWrapper = document.getElementById(
-            "proveedor-select-wrapper",
-        ) as HTMLDivElement;
-        const inputWrapper = document.getElementById(
-            "proveedor-input-wrapper",
-        ) as HTMLDivElement;
-        const nuevaBtn = document.getElementById(
-            "proveedor-nueva-btn",
-        ) as HTMLButtonElement;
-        const input = document.getElementById(
-            "proveedor-input",
-        ) as HTMLInputElement;
-        const aceptarBtn = document.getElementById(
-            "proveedor-aceptar",
-        ) as HTMLButtonElement;
-        const cancelarBtn = document.getElementById(
-            "proveedor-cancelar",
-        ) as HTMLButtonElement;
-        const spinner = document.getElementById(
-            "proveedor-spinner",
-        ) as HTMLDivElement;
-
-        let isSubmitting = false;
-
-        const handleOutsideClick = (e: MouseEvent) => {
-            if (isSubmitting) return;
-            if (!container.contains(e.target as Node)) {
-                cancelarBtn.click();
-            }
-        };
-
-        nuevaBtn.addEventListener("click", () => {
-            selectWrapper.classList.add("hidden");
-            inputWrapper.classList.remove("hidden");
-            nuevaBtn.classList.add("hidden");
-            input.focus();
-            document.addEventListener("mousedown", handleOutsideClick);
-        });
-
-        aceptarBtn.addEventListener("click", async () => {
-            const nuevoProveedor = input.value.trim();
-            if (nuevoProveedor) {
-                isSubmitting = true;
-                input.disabled = true;
-                aceptarBtn.disabled = true;
-                aceptarBtn.classList.add("hidden");
-                spinner.classList.remove("hidden");
-
-                const { data, error } = await actions.addSupplier({
-                    nombre: nuevoProveedor,
-                });
-
-                if (!isSubmitting) return;
-
-                if (error) {
-                    console.error("Error al agregar proveedor:", error);
-                    isSubmitting = false;
-                    input.disabled = false;
-                    aceptarBtn.disabled = false;
-                    aceptarBtn.classList.remove("hidden");
-                    spinner.classList.add("hidden");
-                    return;
-                }
-
-                if (data) {
-                    const option = document.createElement("option");
-                    option.value = data.id_proveedor.toString();
-                    option.textContent = data.nombre_proveedor;
-                    select.appendChild(option);
-                    select.value = data.id_proveedor.toString();
-                }
-            }
-            resetState();
-        });
-
-        function resetState() {
-            isSubmitting = false;
-            input.value = "";
-            input.disabled = false;
-            aceptarBtn.disabled = false;
-            aceptarBtn.classList.remove("hidden");
-            spinner.classList.add("hidden");
-            inputWrapper.classList.add("hidden");
-            selectWrapper.classList.remove("hidden");
-            nuevaBtn.classList.remove("hidden");
-            document.removeEventListener("mousedown", handleOutsideClick);
-        }
-
-        cancelarBtn.addEventListener("click", () => {
-            resetState();
-        });
-
-        input.addEventListener("keydown", (e) => {
-            if (isSubmitting) return;
-            if (e.key === "Enter") {
-                e.preventDefault();
-                aceptarBtn.click();
-            } else if (e.key === "Escape") {
-                cancelarBtn.click();
-            }
-        });
-    })();
-
-    descriptionTextarea?.addEventListener("input", () => {
-        const currentLength = descriptionTextarea.value.length;
-        charCounter.textContent = `${currentLength}/200`;
-        if (currentLength >= 200) {
-            charCounter.classList.remove("bg-gray-100", "text-text-muted");
-            charCounter.classList.add("bg-red-100", "text-red-600");
-        } else {
+        const hideSuccessModal = () => {
+            successModal.classList.add("hidden");
+            successModal.classList.remove("flex");
+            document.body.style.overflow = "auto";
+            // Opcional: limpiar el formulario aquí si se desea
+            form.reset();
+            imageFiles = [];
+            renderPreviews();
+            updateUI();
+            charCounter.textContent = "0/200";
             charCounter.classList.add("bg-gray-100", "text-text-muted");
             charCounter.classList.remove("bg-red-100", "text-red-600");
-        }
-    });
 
-    const form = document.getElementById("form") as HTMLFormElement;
+            // Reset button state
+            submitBtn.disabled = false;
+            submitText.textContent = "Agregar Producto";
+        };
 
-    form?.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const formData = new FormData(form);
-        const nombre = formData.get("nombre") as string;
-        const precio = (formData.get("precio") as string).replace(/\./g, "");
-        const genero = formData.get("genero") as string;
-        const categoria = formData.get("categoria") as string;
-        const categoriaNombre = document.getElementById(
-            "categoria",
-        ) as HTMLSelectElement;
-        const proveedor = formData.get("proveedor") as string;
-        const proveedorNombre = document.getElementById(
-            "proveedor",
-        ) as HTMLSelectElement;
-        const descripcion = formData.get("descripcion") as string;
+        closeSuccessModal?.addEventListener("click", hideSuccessModal);
+        closeSuccessModalX?.addEventListener("click", hideSuccessModal);
 
-        // Limpiar errores previos
-        dismissMessage(nombreError);
-        dismissMessage(precioError);
-        dismissMessage(generoError);
-        dismissMessage(categoriaError);
-        dismissMessage(proveedorError);
-        dismissMessage(descripcionError);
-        dismissMessage(messagesContainer);
+        function showMessage(
+            text: string,
+            type: "error" | "warning",
+            container: HTMLElement = messagesContainer,
+        ) {
+            if (activeMessages.has(container)) {
+                clearTimeout(activeMessages.get(container));
+            }
+            container.innerHTML = "";
 
-        let hasError = false;
-
-        if (!nombre.trim()) {
-            showMessage("El nombre es obligatorio", "error", nombreError);
-            hasError = true;
-        }
-        if (!descripcion.trim()) {
-            showMessage(
-                "La descripción es obligatoria",
-                "error",
-                descripcionError,
-            );
-            hasError = true;
-        } else if (descripcion.length > 200) {
-            showMessage(
-                "La descripción no puede superar los 200 caracteres",
-                "error",
-                descripcionError,
-            );
-            hasError = true;
-        }
-        if (!precio.trim()) {
-            showMessage("El precio es obligatorio", "error", precioError);
-            hasError = true;
-        }
-        if (!genero) {
-            showMessage("Selecciona un género", "error", generoError);
-            hasError = true;
-        }
-        if (!categoria) {
-            showMessage("Selecciona una categoría", "error", categoriaError);
-            hasError = true;
-        }
-        if (!proveedor) {
-            showMessage("Selecciona un proveedor", "error", proveedorError);
-            hasError = true;
-        }
-        if (imageFiles.length === 0) {
-            showMessage(
-                "Debes agregar al menos una imagen",
-                "error",
-                messagesContainer,
-            );
-            hasError = true;
-        }
-
-        if (hasError) return;
-
-        // Iniciar estado de carga
-        loadingBar.classList.remove("hidden");
-        submitBtn.disabled = true;
-        submitText.textContent = "Guardando...";
-        submitSpinner.classList.remove("hidden");
-
-        try {
-            // Verificar si el producto o descripción ya existen
-            const { data: duplicates, error: checkError } =
-                await actions.checkProductDuplicates({ nombre, descripcion });
-
-            if (checkError) {
-                loadingBar.classList.add("hidden");
-                submitBtn.disabled = false;
-                submitText.textContent = "Agregar Producto";
-                submitSpinner.classList.add("hidden");
-
-                if (
-                    "issues" in checkError &&
-                    Array.isArray(checkError.issues) &&
-                    checkError.issues?.at(0)?.code === "too_small" &&
-                    nombre.length < 4
-                ) {
-                    showMessage(
-                        "El nombre debe tener al menos 4 caracteres",
-                        "error",
-                        nombreError,
-                    );
-                } else if (
-                    "issues" in checkError &&
-                    Array.isArray(checkError.issues) &&
-                    checkError.issues?.at(0)?.code === "too_small" &&
-                    descripcion.length < 4
-                ) {
-                    showMessage(
-                        "La descripción debe tener al menos 4 caracteres",
-                        "error",
-                        descripcionError,
-                    );
-                }
-                return;
-            } else if (
-                duplicates &&
-                (duplicates.nombre || duplicates.descripcion)
+            const input = container.previousElementSibling as
+                | HTMLInputElement
+                | HTMLSelectElement
+                | HTMLTextAreaElement;
+            if (
+                input &&
+                (input.tagName === "INPUT" ||
+                    input.tagName === "SELECT" ||
+                    input.tagName === "TEXTAREA")
             ) {
-                loadingBar.classList.add("hidden");
-                submitBtn.disabled = false;
-                submitText.textContent = "Agregar Producto";
-                submitSpinner.classList.add("hidden");
-
-                // Mostrar modal de error
-                let message = "";
-                if (duplicates.nombre && duplicates.descripcion) {
-                    message = `El nombre <span class="font-bold text-red-600">"${nombre}"</span> y la descripción ya están en uso.`;
-                } else if (duplicates.nombre) {
-                    message = `El nombre <span class="font-bold text-red-600">"${nombre}"</span> ya está en uso.`;
-                } else {
-                    message = `La descripción ya existe en nuestra base de datos.`;
-                }
-
-                duplicateMessage.innerHTML = message;
-
-                // Limpiar y llenar la galería del modal con las imágenes seleccionadas
-                duplicateImagesPreview.innerHTML = "";
-                imageFiles.forEach((file: File) => {
-                    const url = URL.createObjectURL(file);
-                    const img = document.createElement("img");
-                    img.src = url;
-                    img.className =
-                        "aspect-square w-full object-cover rounded-md border border-border shadow-sm";
-                    duplicateImagesPreview.appendChild(img);
-                });
-
-                duplicateModal.classList.remove("hidden");
-                duplicateModal.classList.add("flex");
-                document.body.style.overflow = "hidden";
-                return;
+                input.classList.add(
+                    type === "error" ? "!border-red-500" : "!border-amber-500",
+                );
+                input.classList.remove("border-border", "focus:ring-primary");
             }
 
-            const uploadFormData = new FormData();
-            const nameCategory =
-                categoriaNombre.selectedOptions[0].text.toString();
-            const nameSupplier =
-                proveedorNombre.selectedOptions[0].text.toString();
+            const div = document.createElement("div");
+            div.className = `flex items-center gap-1.5 px-2 py-1 rounded text-[11px] leading-tight ${type === "error" ? "text-red-600" : "text-amber-600"}`;
+            div.innerHTML = `
+                <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${type === "error" ? "M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" : "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"}"></path>
+                </svg>
+                <span class="truncate">${text}</span>
+            `;
 
-            imageFiles.forEach((file, index) =>
-                uploadFormData.append(
-                    "images",
-                    file,
-                    `REF-${nameSupplier.at(0)?.toUpperCase()}${nameCategory.at(0)?.toUpperCase()}-${nombre.replaceAll(" ", "-")}-${index + 1}.${file.name.split(".").at(-1)}`,
-                ),
-            );
-            uploadFormData.append("type", nameCategory);
-            uploadFormData.append("supplier", nameSupplier);
-            uploadFormData.append("name", nombre);
+            container.appendChild(div);
 
-            const { data: images, error: productError } =
-                await actions.uploadImages(uploadFormData);
-            if (productError) {
-                loadingBar.classList.add("hidden");
-                submitBtn.disabled = false;
-                submitText.textContent = "Agregar Producto";
-                submitSpinner.classList.add("hidden");
+            const timeout = setTimeout(() => {
+                div.style.opacity = "0";
+                div.style.transition = "opacity 0.3s";
+                setTimeout(() => {
+                    div.remove();
+                    activeMessages.delete(container);
+                    if (
+                        input &&
+                        (input.tagName === "INPUT" ||
+                            input.tagName === "SELECT" ||
+                            input.tagName === "TEXTAREA")
+                    ) {
+                        input.classList.remove(
+                            "!border-red-500",
+                            "!border-amber-500",
+                        );
+                        input.classList.add("border-border", "focus:ring-primary");
+                    }
+                }, 300);
+            }, 4000);
+            activeMessages.set(container, timeout);
+        }
 
-                let message = "Error al subir las imágenes";
-                if (productError.message)
-                    message = `Error al subir las imágenes: ${productError.message}`;
+        function dismissMessage(container: HTMLElement = messagesContainer) {
+            if (activeMessages.has(container)) {
+                clearTimeout(activeMessages.get(container));
+                activeMessages.delete(container);
+            }
+            const input = container.previousElementSibling as
+                | HTMLInputElement
+                | HTMLSelectElement
+                | HTMLTextAreaElement;
+            if (
+                input &&
+                (input.tagName === "INPUT" ||
+                    input.tagName === "SELECT" ||
+                    input.tagName === "TEXTAREA")
+            ) {
+                input.classList.remove("!border-red-500", "!border-amber-500");
+                input.classList.add("border-border", "focus:ring-primary");
+            }
+            container.innerHTML = "";
+        }
 
-                duplicateMessage.innerHTML = message;
-                duplicateModal.classList.remove("hidden");
-                duplicateModal.classList.add("flex");
-                document.body.style.overflow = "hidden";
+        function updateUI() {
+            counter.textContent = `${imageFiles.length}/${MAX_IMAGES}`;
+
+            if (imageFiles.length >= MAX_IMAGES) {
+                uploadPrompt.classList.add("hidden");
+                limitMessage.classList.remove("hidden");
+                dropZone?.classList.remove("hover:border-primary");
+                dropZone?.classList.add("border-amber-400", "bg-amber-50");
+                fileInput.disabled = true;
             } else {
-                // enviar a la base de datos
-                const { error: addProductError } = await actions.addProduct({
-                    nombre,
-                    descripcion,
-                    precio,
-                    genero,
-                    categoria,
-                    proveedor,
-                    images: images || [],
-                });
+                uploadPrompt.classList.remove("hidden");
+                limitMessage.classList.add("hidden");
+                dropZone?.classList.add("hover:border-primary");
+                dropZone?.classList.remove("border-amber-400", "bg-amber-50");
+                fileInput.disabled = false;
+            }
+        }
 
-                loadingBar.classList.add("hidden");
-                // Mantenemos el botón desactivado hasta que cierre el modal de éxito
-                // o lo reactivamos si hay error
+        function renderPreviews() {
+            blobUrls.forEach((url) => URL.revokeObjectURL(url));
+            blobUrls = [];
+            previewContainer.innerHTML = "";
 
-                if (addProductError) {
+            imageFiles.forEach((file, index) => {
+                const blobUrl = URL.createObjectURL(file);
+                blobUrls.push(blobUrl);
+
+                const div = document.createElement("div");
+                div.className =
+                    "relative group aspect-square rounded-lg overflow-hidden border border-border bg-gray-100";
+
+                const img = document.createElement("img");
+                img.src = blobUrl;
+                img.className = "w-full h-full object-cover";
+                img.onerror = () => {
+                    URL.revokeObjectURL(blobUrl);
+                    blobUrls = blobUrls.filter((url) => url !== blobUrl);
+                    imageFiles.splice(index, 1);
+                    showMessage(
+                        `La imagen "${file.name}" esta dañada o no se puede leer`,
+                        "error",
+                    );
+                    renderPreviews();
+                    updateUI();
+                };
+
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className =
+                    "absolute top-1 right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity";
+                btn.innerHTML = `<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    URL.revokeObjectURL(blobUrl);
+                    blobUrls = blobUrls.filter((url) => url !== blobUrl);
+                    imageFiles.splice(index, 1);
+                    renderPreviews();
+                    updateUI();
+                };
+
+                const badge = document.createElement("span");
+                badge.className =
+                    "absolute bottom-1 left-1 bg-primary/80 text-white text-[10px] px-1.5 py-0.5 rounded";
+                badge.textContent = `${index + 1}`;
+
+                div.appendChild(img);
+                div.appendChild(btn);
+                div.appendChild(badge);
+                previewContainer.appendChild(div);
+            });
+        }
+
+        function addImages(files: FileList | null) {
+            if (!files) return;
+            dismissMessage(messagesContainer);
+
+            Array.from(files).forEach((file) => {
+                if (imageFiles.length >= MAX_IMAGES) return;
+
+                if (!ALLOWED_TYPES.includes(file.type)) {
+                    showMessage(
+                        `"${file.name}" no es un formato valido (usa JPG, PNG o WebP)`,
+                        "error",
+                    );
+                    return;
+                }
+
+                if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+                    showMessage(
+                        `"${file.name}" supera los ${MAX_SIZE_MB}MB`,
+                        "error",
+                    );
+                    return;
+                }
+
+                const exists = imageFiles.some(
+                    (f) => f.name === file.name && f.size === file.size,
+                );
+                if (exists) {
+                    showMessage(`"${file.name}" ya fue agregada`, "warning");
+                    return;
+                }
+
+                imageFiles.push(file);
+            });
+
+            renderPreviews();
+            updateUI();
+        }
+
+        dropZone?.addEventListener("click", () => {
+            if (imageFiles.length < MAX_IMAGES) {
+                fileInput?.click();
+            }
+        });
+
+        dropZone?.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            if (imageFiles.length < MAX_IMAGES) {
+                dropZone?.classList.add("border-primary", "bg-primary/5");
+            }
+        });
+
+        dropZone?.addEventListener("dragleave", (e) => {
+            e.preventDefault();
+            dropZone?.classList.remove("border-primary", "bg-primary/5");
+        });
+
+        dropZone?.addEventListener("drop", (e) => {
+            e.preventDefault();
+            dropZone?.classList.remove("border-primary", "bg-primary/5");
+            addImages(e.dataTransfer?.files || null);
+        });
+
+        fileInput?.addEventListener("change", () => addImages(fileInput?.files));
+
+        updateUI();
+
+        (function initCategoriaNueva() {
+            const container = document.getElementById(
+                "categoria-container",
+            ) as HTMLDivElement;
+            const select = document.getElementById(
+                "categoria",
+            ) as HTMLSelectElement;
+            const selectWrapper = document.getElementById(
+                "categoria-select-wrapper",
+            ) as HTMLDivElement;
+            const inputWrapper = document.getElementById(
+                "categoria-input-wrapper",
+            ) as HTMLDivElement;
+            const nuevaBtn = document.getElementById(
+                "categoria-nueva-btn",
+            ) as HTMLButtonElement;
+            const input = document.getElementById(
+                "categoria-input",
+            ) as HTMLInputElement;
+            const aceptarBtn = document.getElementById(
+                "categoria-aceptar",
+            ) as HTMLButtonElement;
+            const cancelarBtn = document.getElementById(
+                "categoria-cancelar",
+            ) as HTMLButtonElement;
+            const spinner = document.getElementById(
+                "categoria-spinner",
+            ) as HTMLDivElement;
+
+            let isSubmitting = false;
+
+            const handleOutsideClick = (e: MouseEvent) => {
+                if (isSubmitting) return;
+                if (!container.contains(e.target as Node)) {
+                    cancelarBtn.click();
+                }
+            };
+
+            nuevaBtn.addEventListener("click", () => {
+                selectWrapper.classList.add("hidden");
+                inputWrapper.classList.remove("hidden");
+                nuevaBtn.classList.add("hidden");
+                input.focus();
+                document.addEventListener("mousedown", handleOutsideClick);
+            });
+
+            aceptarBtn.addEventListener("click", async () => {
+                const nuevaCategoria = input.value.trim();
+                if (nuevaCategoria) {
+                    isSubmitting = true;
+                    input.disabled = true;
+                    aceptarBtn.disabled = true;
+                    aceptarBtn.classList.add("hidden");
+                    spinner.classList.remove("hidden");
+
+                    const { data, error } = await actions.addCategory({
+                        nombre: nuevaCategoria,
+                    });
+
+                    // Si se canceló mientras cargaba (aunqueisSubmitting previene esto parcialmente)
+                    // el estado se reseteará en cancelarBtn.click()
+
+                    if (!isSubmitting) return; // Ya se canceló
+
+                    if (error) {
+                        console.error("Error al agregar categoria:", error);
+                        isSubmitting = false;
+                        input.disabled = false;
+                        aceptarBtn.disabled = false;
+                        aceptarBtn.classList.remove("hidden");
+                        spinner.classList.add("hidden");
+                        return;
+                    }
+
+                    if (data) {
+                        const option = document.createElement("option");
+                        option.value = data.id_tipo_producto.toString();
+                        option.textContent = data.nombre_tipo_producto;
+                        select.appendChild(option);
+                        select.value = data.id_tipo_producto.toString();
+                    }
+                }
+                resetState();
+            });
+
+            function resetState() {
+                isSubmitting = false;
+                input.value = "";
+                input.disabled = false;
+                aceptarBtn.disabled = false;
+                aceptarBtn.classList.remove("hidden");
+                spinner.classList.add("hidden");
+                inputWrapper.classList.add("hidden");
+                selectWrapper.classList.remove("hidden");
+                nuevaBtn.classList.remove("hidden");
+                document.removeEventListener("mousedown", handleOutsideClick);
+            }
+
+            cancelarBtn.addEventListener("click", () => {
+                resetState();
+            });
+
+            input.addEventListener("keydown", (e) => {
+                if (isSubmitting) return;
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    aceptarBtn.click();
+                } else if (e.key === "Escape") {
+                    cancelarBtn.click();
+                }
+            });
+        })();
+
+        (function initProveedorNuevo() {
+            const container = document.getElementById(
+                "proveedor-container",
+            ) as HTMLDivElement;
+            const select = document.getElementById(
+                "proveedor",
+            ) as HTMLSelectElement;
+            const selectWrapper = document.getElementById(
+                "proveedor-select-wrapper",
+            ) as HTMLDivElement;
+            const inputWrapper = document.getElementById(
+                "proveedor-input-wrapper",
+            ) as HTMLDivElement;
+            const nuevaBtn = document.getElementById(
+                "proveedor-nueva-btn",
+            ) as HTMLButtonElement;
+            const input = document.getElementById(
+                "proveedor-input",
+            ) as HTMLInputElement;
+            const aceptarBtn = document.getElementById(
+                "proveedor-aceptar",
+            ) as HTMLButtonElement;
+            const cancelarBtn = document.getElementById(
+                "proveedor-cancelar",
+            ) as HTMLButtonElement;
+            const spinner = document.getElementById(
+                "proveedor-spinner",
+            ) as HTMLDivElement;
+
+            let isSubmitting = false;
+
+            const handleOutsideClick = (e: MouseEvent) => {
+                if (isSubmitting) return;
+                if (!container.contains(e.target as Node)) {
+                    cancelarBtn.click();
+                }
+            };
+
+            nuevaBtn.addEventListener("click", () => {
+                selectWrapper.classList.add("hidden");
+                inputWrapper.classList.remove("hidden");
+                nuevaBtn.classList.add("hidden");
+                input.focus();
+                document.addEventListener("mousedown", handleOutsideClick);
+            });
+
+            aceptarBtn.addEventListener("click", async () => {
+                const nuevoProveedor = input.value.trim();
+                if (nuevoProveedor) {
+                    isSubmitting = true;
+                    input.disabled = true;
+                    aceptarBtn.disabled = true;
+                    aceptarBtn.classList.add("hidden");
+                    spinner.classList.remove("hidden");
+
+                    const { data, error } = await actions.addSupplier({
+                        nombre: nuevoProveedor,
+                    });
+
+                    if (!isSubmitting) return;
+
+                    if (error) {
+                        console.error("Error al agregar proveedor:", error);
+                        isSubmitting = false;
+                        input.disabled = false;
+                        aceptarBtn.disabled = false;
+                        aceptarBtn.classList.remove("hidden");
+                        spinner.classList.add("hidden");
+                        return;
+                    }
+
+                    if (data) {
+                        const option = document.createElement("option");
+                        option.value = data.id_proveedor.toString();
+                        option.textContent = data.nombre_proveedor;
+                        select.appendChild(option);
+                        select.value = data.id_proveedor.toString();
+                    }
+                }
+                resetState();
+            });
+
+            function resetState() {
+                isSubmitting = false;
+                input.value = "";
+                input.disabled = false;
+                aceptarBtn.disabled = false;
+                aceptarBtn.classList.remove("hidden");
+                spinner.classList.add("hidden");
+                inputWrapper.classList.add("hidden");
+                selectWrapper.classList.remove("hidden");
+                nuevaBtn.classList.remove("hidden");
+                document.removeEventListener("mousedown", handleOutsideClick);
+            }
+
+            cancelarBtn.addEventListener("click", () => {
+                resetState();
+            });
+
+            input.addEventListener("keydown", (e) => {
+                if (isSubmitting) return;
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    aceptarBtn.click();
+                } else if (e.key === "Escape") {
+                    cancelarBtn.click();
+                }
+            });
+        })();
+
+        descriptionTextarea?.addEventListener("input", () => {
+            const currentLength = descriptionTextarea.value.length;
+            charCounter.textContent = `${currentLength}/200`;
+            if (currentLength >= 200) {
+                charCounter.classList.remove("bg-gray-100", "text-text-muted");
+                charCounter.classList.add("bg-red-100", "text-red-600");
+            } else {
+                charCounter.classList.add("bg-gray-100", "text-text-muted");
+                charCounter.classList.remove("bg-red-100", "text-red-600");
+            }
+        });
+
+        const form = document.getElementById("form") as HTMLFormElement;
+
+        form?.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const nombre = formData.get("nombre") as string;
+            const precio = (formData.get("precio") as string).replace(/\./g, "");
+            const genero = formData.get("genero") as string;
+            const categoria = formData.get("categoria") as string;
+            const categoriaNombre = document.getElementById(
+                "categoria",
+            ) as HTMLSelectElement;
+            const proveedor = formData.get("proveedor") as string;
+            const proveedorNombre = document.getElementById(
+                "proveedor",
+            ) as HTMLSelectElement;
+            const descripcion = formData.get("descripcion") as string;
+
+            // Limpiar errores previos
+            dismissMessage(nombreError);
+            dismissMessage(precioError);
+            dismissMessage(generoError);
+            dismissMessage(categoriaError);
+            dismissMessage(proveedorError);
+            dismissMessage(descripcionError);
+            dismissMessage(messagesContainer);
+
+            let hasError = false;
+
+            if (!nombre.trim()) {
+                showMessage("El nombre es obligatorio", "error", nombreError);
+                hasError = true;
+            }
+            if (!descripcion.trim()) {
+                showMessage(
+                    "La descripción es obligatoria",
+                    "error",
+                    descripcionError,
+                );
+                hasError = true;
+            } else if (descripcion.length > 200) {
+                showMessage(
+                    "La descripción no puede superar los 200 caracteres",
+                    "error",
+                    descripcionError,
+                );
+                hasError = true;
+            }
+            if (!precio.trim()) {
+                showMessage("El precio es obligatorio", "error", precioError);
+                hasError = true;
+            }
+            if (!genero) {
+                showMessage("Selecciona un género", "error", generoError);
+                hasError = true;
+            }
+            if (!categoria) {
+                showMessage("Selecciona una categoría", "error", categoriaError);
+                hasError = true;
+            }
+            if (!proveedor) {
+                showMessage("Selecciona un proveedor", "error", proveedorError);
+                hasError = true;
+            }
+            if (imageFiles.length === 0) {
+                showMessage(
+                    "Debes agregar al menos una imagen",
+                    "error",
+                    messagesContainer,
+                );
+                hasError = true;
+            }
+
+            if (hasError) return;
+
+            // Iniciar estado de carga
+            loadingBar.classList.remove("hidden");
+            submitBtn.disabled = true;
+            submitText.textContent = "Guardando...";
+            submitSpinner.classList.remove("hidden");
+
+            try {
+                // Verificar si el producto o descripción ya existen
+                const { data: duplicates, error: checkError } =
+                    await actions.checkProductDuplicates({ nombre, descripcion });
+
+                if (checkError) {
+                    loadingBar.classList.add("hidden");
                     submitBtn.disabled = false;
                     submitText.textContent = "Agregar Producto";
                     submitSpinner.classList.add("hidden");
 
-                    duplicateMessage.innerHTML = `Error al guardar el producto: ${addProductError.message}`;
+                    if (
+                        "issues" in checkError &&
+                        Array.isArray(checkError.issues) &&
+                        checkError.issues?.at(0)?.code === "too_small" &&
+                        nombre.length < 4
+                    ) {
+                        showMessage(
+                            "El nombre debe tener al menos 4 caracteres",
+                            "error",
+                            nombreError,
+                        );
+                    } else if (
+                        "issues" in checkError &&
+                        Array.isArray(checkError.issues) &&
+                        checkError.issues?.at(0)?.code === "too_small" &&
+                        descripcion.length < 4
+                    ) {
+                        showMessage(
+                            "La descripción debe tener al menos 4 caracteres",
+                            "error",
+                            descripcionError,
+                        );
+                    }
+                    return;
+                } else if (
+                    duplicates &&
+                    (duplicates.nombre || duplicates.descripcion)
+                ) {
+                    loadingBar.classList.add("hidden");
+                    submitBtn.disabled = false;
+                    submitText.textContent = "Agregar Producto";
+                    submitSpinner.classList.add("hidden");
+
+                    // Mostrar modal de error
+                    let message = "";
+                    if (duplicates.nombre && duplicates.descripcion) {
+                        message = `El nombre <span class="font-bold text-red-600">"${nombre}"</span> y la descripción ya están en uso.`;
+                    } else if (duplicates.nombre) {
+                        message = `El nombre <span class="font-bold text-red-600">"${nombre}"</span> ya está en uso.`;
+                    } else {
+                        message = `La descripción ya existe en nuestra base de datos.`;
+                    }
+
+                    duplicateMessage.innerHTML = message;
+
+                    // Limpiar y llenar la galería del modal con las imágenes seleccionadas
+                    duplicateImagesPreview.innerHTML = "";
+                    imageFiles.forEach((file: File) => {
+                        const url = URL.createObjectURL(file);
+                        const img = document.createElement("img");
+                        img.src = url;
+                        img.className =
+                            "aspect-square w-full object-cover rounded-md border border-border shadow-sm";
+                        duplicateImagesPreview.appendChild(img);
+                    });
+
+                    duplicateModal.classList.remove("hidden");
+                    duplicateModal.classList.add("flex");
+                    document.body.style.overflow = "hidden";
+                    return;
+                }
+
+                const uploadFormData = new FormData();
+                const nameCategory =
+                    categoriaNombre.selectedOptions[0].text.toString();
+                const nameSupplier =
+                    proveedorNombre.selectedOptions[0].text.toString();
+
+                imageFiles.forEach((file, index) =>
+                    uploadFormData.append(
+                        "images",
+                        file,
+                        `REF-${nameSupplier.at(0)?.toUpperCase()}${nameCategory.at(0)?.toUpperCase()}-${nombre.replaceAll(" ", "-")}-${index + 1}.${file.name.split(".").at(-1)}`,
+                    ),
+                );
+                uploadFormData.append("type", nameCategory);
+                uploadFormData.append("supplier", nameSupplier);
+                uploadFormData.append("name", nombre);
+
+                const { data: images, error: productError } =
+                    await actions.uploadImages(uploadFormData);
+                if (productError) {
+                    loadingBar.classList.add("hidden");
+                    submitBtn.disabled = false;
+                    submitText.textContent = "Agregar Producto";
+                    submitSpinner.classList.add("hidden");
+
+                    let message = "Error al subir las imágenes";
+                    if (productError.message)
+                        message = `Error al subir las imágenes: ${productError.message}`;
+
+                    duplicateMessage.innerHTML = message;
                     duplicateModal.classList.remove("hidden");
                     duplicateModal.classList.add("flex");
                     document.body.style.overflow = "hidden";
                 } else {
-                    submitText.textContent = "¡Guardado!";
-                    submitSpinner.classList.add("hidden");
+                    // enviar a la base de datos
+                    const { error: addProductError } = await actions.addProduct({
+                        nombre,
+                        descripcion,
+                        precio,
+                        genero,
+                        categoria,
+                        proveedor,
+                        images: images || [],
+                    });
 
-                    // Mostrar modal de éxito
-                    successModal.classList.remove("hidden");
-                    successModal.classList.add("flex");
-                    document.body.style.overflow = "hidden";
+                    loadingBar.classList.add("hidden");
+                    // Mantenemos el botón desactivado hasta que cierre el modal de éxito
+                    // o lo reactivamos si hay error
+
+                    if (addProductError) {
+                        submitBtn.disabled = false;
+                        submitText.textContent = "Agregar Producto";
+                        submitSpinner.classList.add("hidden");
+
+                        duplicateMessage.innerHTML = `Error al guardar el producto: ${addProductError.message}`;
+                        duplicateModal.classList.remove("hidden");
+                        duplicateModal.classList.add("flex");
+                        document.body.style.overflow = "hidden";
+                    } else {
+                        submitText.textContent = "¡Guardado!";
+                        submitSpinner.classList.add("hidden");
+
+                        // Mostrar modal de éxito
+                        successModal.classList.remove("hidden");
+                        successModal.classList.add("flex");
+                        document.body.style.overflow = "hidden";
+                    }
                 }
+            } catch (err) {
+                loadingBar.classList.add("hidden");
+                submitBtn.disabled = false;
+                submitText.textContent = "Agregar Producto";
+                submitSpinner.classList.add("hidden");
+                console.error("Error inesperado:", err);
             }
-        } catch (err) {
-            loadingBar.classList.add("hidden");
-            submitBtn.disabled = false;
-            submitText.textContent = "Agregar Producto";
-            submitSpinner.classList.add("hidden");
-            console.error("Error inesperado:", err);
-        }
-    });
+        });
+    })()
 
 </script>
