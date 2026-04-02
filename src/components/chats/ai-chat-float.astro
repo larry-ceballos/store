@@ -1,7 +1,7 @@
 ---
-import Sparkles from "@/src/assets/sparkles.astro";
-import IaBooble from "./ia-booble.astro";
-import InputArea from "./input-area.astro";
+import Sparkles from "@/src/assets/sparkles.astro"
+import IaBooble from "@/src/components/chats/ia-booble.astro"
+import InputArea from "@/src/components/chats/input-area.astro"
 ---
 
 <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-none">
@@ -145,9 +145,9 @@ import InputArea from "./input-area.astro";
     }
 
     @keyframes shake {
-        0%, 100% { transform: translateX(0); }
-        25% { transform: translateX(-2px); }
-        75% { transform: translateX(2px); }
+        0%, 100% { transform: translateX(0) };
+        25% { transform: translateX(-2px) };
+        75% { transform: translateX(2px) };
     }
 
     .error-shake {
@@ -156,89 +156,92 @@ import InputArea from "./input-area.astro";
 </style>
 
 <script>
-    const container = document.getElementById("ai-chat-container");
-    const bubbleTrigger = document.getElementById("ai-chat-bubble-trigger");
-    const closeChatBtn = document.getElementById("close-chat-btn");
-    const chatInput = document.getElementById("chat-input") as HTMLTextAreaElement;
-    const chatSendBtn = document.getElementById("chat-send-btn") as HTMLButtonElement;
-    const chatMessages = document.getElementById("chat-messages") as HTMLDivElement;
+    import { actions } from "astro:actions"
+    import { marked } from 'marked';
+
+    const container = document.getElementById("ai-chat-container")
+    const bubbleTrigger = document.getElementById("ai-chat-bubble-trigger")
+    const closeChatBtn = document.getElementById("close-chat-btn")
+    const chatInput = document.getElementById("chat-input") as HTMLTextAreaElement
+    const chatSendBtn = document.getElementById("chat-send-btn") as HTMLButtonElement
+    const chatMessages = document.getElementById("chat-messages") as HTMLDivElement
 
     // Image Upload Elements
-    const uploadBtn = document.getElementById("upload-image-btn");
-    const imageInput = document.getElementById("image-upload-input") as HTMLInputElement;
-    const previewContainer = document.getElementById("image-preview-container");
-    const previewsWrapper = document.getElementById("image-previews");
-    const imageError = document.getElementById("image-error");
+    const uploadBtn = document.getElementById("upload-image-btn") as HTMLButtonElement
+    const imageInput = document.getElementById("image-upload-input") as HTMLInputElement
+    const previewContainer = document.getElementById("image-preview-container")
+    const previewsWrapper = document.getElementById("image-previews")
+    const imageError = document.getElementById("image-error")
 
-    let selectedFiles: File[] = [];
-    const MAX_IMAGES = 5;
-    const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/avif", "image/webp"];
+    let selectedFiles: File[] = []
+    const MAX_IMAGES = 5
+    const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/avif", "image/webp"]
 
     function toggleChat() {
-        container?.classList.toggle("open");
+        container?.classList.toggle("open")
     }
 
     bubbleTrigger?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        toggleChat();
-    });
+        e.stopPropagation()
+        toggleChat()
+    })
 
     closeChatBtn?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        toggleChat();
-    });
+        e.stopPropagation()
+        toggleChat()
+    })
 
     // Cerrar al hacer clic fuera
     document.addEventListener("click", (e) => {
-        if (!container) return;
+        if (!container) return
         
-        const isClickInside = container.contains(e.target as Node);
-        const isOpen = container.classList.contains("open");
+        const isClickInside = container.contains(e.target as Node)
+        const isOpen = container.classList.contains("open")
 
         if (!isClickInside && isOpen) {
-            container.classList.remove("open");
+            container.classList.remove("open")
         }
-    });
+    })
 
     function autoResizeChatInput() {
-        if (!chatInput) return;
-        chatInput.style.height = "auto";
-        chatInput.style.height = chatInput.scrollHeight + "px";
+        if (!chatInput) return
+        chatInput.style.height = "auto"
+        chatInput.style.height = chatInput.scrollHeight + "px"
     }
 
     function showError(message: string) {
-        if (!imageError) return;
-        imageError.textContent = message;
-        imageError.classList.remove("hidden");
+        if (!imageError) return
+        imageError.textContent = message
+        imageError.classList.remove("hidden")
         
         // Shake animation
-        previewContainer?.classList.add("error-shake");
-        setTimeout(() => previewContainer?.classList.remove("error-shake"), 400);
+        previewContainer?.classList.add("error-shake")
+        setTimeout(() => previewContainer?.classList.remove("error-shake"), 400)
 
         setTimeout(() => {
-            imageError.classList.add("hidden");
-        }, 3000);
+            imageError.classList.add("hidden")
+        }, 3000)
     }
 
     function updatePreviews() {
-        if (!previewsWrapper || !previewContainer) return;
+        if (!previewsWrapper || !previewContainer) return
         
-        previewsWrapper.innerHTML = "";
+        previewsWrapper.innerHTML = ""
         
         if (selectedFiles.length === 0) {
-            previewContainer.classList.add("hidden");
-            return;
+            previewContainer.classList.add("hidden")
+            return
         }
 
-        previewContainer.classList.remove("hidden");
+        previewContainer.classList.remove("hidden")
 
         selectedFiles.forEach((file, index) => {
-            const reader = new FileReader();
-            const previewId = `preview-${index}`;
+            const reader = new FileReader()
+            const previewId = `preview-${index}`
             
-            const item = document.createElement("div");
-            item.className = "preview-item relative group w-16 h-16 shrink-0 snap-start";
-            item.id = previewId;
+            const item = document.createElement("div")
+            item.className = "preview-item relative group w-16 h-16 shrink-0 snap-start"
+            item.id = previewId
             item.innerHTML = `
                 <div class="w-full h-full rounded-lg overflow-hidden border border-border bg-gray-100 shadow-sm transition-transform group-hover:scale-105">
                     <img src="" alt="preview" class="w-full h-full object-cover">
@@ -251,101 +254,101 @@ import InputArea from "./input-area.astro";
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
-            `;
+            `
 
-            previewsWrapper.appendChild(item);
+            previewsWrapper.appendChild(item)
 
             reader.onload = (e) => {
-                const img = item.querySelector("img");
+                const img = item.querySelector("img")
                 if (img && e.target?.result) {
-                    img.src = e.target.result as string;
+                    img.src = e.target.result as string
                 }
-            };
-            reader.readAsDataURL(file);
-        });
+            }
+            reader.readAsDataURL(file)
+        })
 
         // Add event listeners to remove buttons
         previewsWrapper.querySelectorAll(".remove-img").forEach(btn => {
             btn.addEventListener("click", (e) => {
-                e.stopPropagation(); // Prevenir que el click cierre el chat
-                const index = parseInt((e.currentTarget as HTMLElement).dataset.index || "0");
-                removeImage(index);
-            });
-        });
+                e.stopPropagation() // Prevenir que el click cierre el chat
+                const index = parseInt((e.currentTarget as HTMLElement).dataset.index || "0")
+                removeImage(index)
+            })
+        })
     }
 
     function removeImage(index: number) {
-        selectedFiles.splice(index, 1);
-        updatePreviews();
-        checkUploadButtonState();
+        selectedFiles.splice(index, 1)
+        updatePreviews()
+        checkUploadButtonState()
     }
 
     function checkUploadButtonState() {
-        if (!uploadBtn) return;
+        if (!uploadBtn) return
         if (selectedFiles.length >= MAX_IMAGES) {
-            uploadBtn.classList.add("opacity-50", "cursor-not-allowed");
-            (uploadBtn as HTMLButtonElement).disabled = true;
+            uploadBtn.classList.add("opacity-50", "cursor-not-allowed")
+            uploadBtn.disabled = true
         } else {
-            uploadBtn.classList.remove("opacity-50", "cursor-not-allowed");
-            (uploadBtn as HTMLButtonElement).disabled = false;
+            uploadBtn.classList.remove("opacity-50", "cursor-not-allowed")
+            uploadBtn.disabled = false
         }
     }
 
     uploadBtn?.addEventListener("click", () => {
         if (selectedFiles.length >= MAX_IMAGES) {
-            showError(`Máximo ${MAX_IMAGES} imágenes permitidas.`);
-            return;
+            showError(`Máximo ${MAX_IMAGES} imágenes permitidas.`)
+            return
         }
-        imageInput?.click();
-    });
+        imageInput?.click()
+    })
 
     imageInput?.addEventListener("change", (e) => {
-        const files = Array.from((e.target as HTMLInputElement).files || []);
-        let addedCount = 0;
-        let errors = [];
+        const files = Array.from((e.target as HTMLInputElement).files || [])
+        let addedCount = 0
+        let errors = []
 
         for (const file of files) {
             if (selectedFiles.length >= MAX_IMAGES) {
-                errors.push("Límite de 5 imágenes alcanzado.");
-                break;
+                errors.push("Límite de 5 imágenes alcanzado.")
+                break
             }
 
             // Check format
             if (!ALLOWED_TYPES.includes(file.type)) {
-                errors.push(`${file.name}: Formato no válido.`);
-                continue;
+                errors.push(`${file.name}: Formato no válido.`)
+                continue
             }
 
             // Check duplicates (name and size)
-            const isDuplicate = selectedFiles.some(f => f.name === file.name && f.size === file.size);
+            const isDuplicate = selectedFiles.some(f => f.name === file.name && f.size === file.size)
             if (isDuplicate) {
-                errors.push(`${file.name}: Imagen ya seleccionada.`);
-                continue;
+                errors.push(`${file.name}: Imagen ya seleccionada.`)
+                continue
             }
 
-            selectedFiles.push(file);
-            addedCount++;
+            selectedFiles.push(file)
+            addedCount++
         }
 
         if (errors.length > 0) {
-            showError(errors[0]);
+            showError(errors[0])
         }
 
         if (addedCount > 0) {
-            updatePreviews();
-            checkUploadButtonState();
+            updatePreviews()
+            checkUploadButtonState()
         }
 
-        imageInput.value = "";
-    });
+        imageInput.value = ""
+    })
 
     function addUserMessage(text: string, images: File[] = []) {
-        if (!chatMessages) return;
-        const messageArticle = document.createElement("article");
+        if (!chatMessages) return
+        const messageArticle = document.createElement("article")
         messageArticle.className =
-            "flex flex-col items-end gap-2 self-end max-w-[85%] animate-in fade-in slide-in-from-right-2 duration-300";
+            "flex flex-col items-end gap-2 self-end max-w-[85%] animate-in fade-in slide-in-from-right-2 duration-300"
         
-        let imagesHtml = "";
+        let imagesHtml = ""
         if (images.length > 0) {
             imagesHtml = `
                 <div class="flex flex-wrap justify-end gap-1 mb-1">
@@ -355,7 +358,7 @@ import InputArea from "./input-area.astro";
                         </div>
                     `).join("")}
                 </div>
-            `;
+            `
         }
 
         messageArticle.innerHTML = `
@@ -366,76 +369,92 @@ import InputArea from "./input-area.astro";
                 </p>
             ` : ""}
             <span class="text-[10px] text-secondary px-1">Usuario</span>
-        `;
+        `
         
-        chatMessages.appendChild(messageArticle);
+        chatMessages.appendChild(messageArticle)
 
         if (images.length > 0) {
-            const imgElements = messageArticle.querySelectorAll("img");
+            const imgElements = messageArticle.querySelectorAll("img")
             images.forEach((file, i) => {
-                const reader = new FileReader();
+                const reader = new FileReader()
                 reader.onload = (e) => {
                     if (imgElements[i] && e.target?.result) {
-                        imgElements[i].src = e.target.result as string;
+                        imgElements[i].src = e.target.result as string
                     }
-                };
-                reader.readAsDataURL(file);
-            });
+                }
+                reader.readAsDataURL(file)
+            })
         }
 
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        chatMessages.scrollTop = chatMessages.scrollHeight
     }
 
     function addIAMessage(text: string) {
-        if (!chatMessages) return;
-        const messageArticle = document.createElement("article");
+        if (!chatMessages) return
+        const markdawnParse = marked.parse(text)
+        const messageArticle = document.createElement("article")
         messageArticle.className =
-            "flex gap-3 max-w-[85%] animate-in fade-in slide-in-from-left-2 duration-300";
+            "flex gap-3 max-w-[85%] animate-in fade-in slide-in-from-left-2 duration-300"
         messageArticle.innerHTML = `
             <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0 shadow-sm border-2 border-primary/20 text-white">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg>
             </div>
-            <p class="bg-white border border-border/50 shadow-sm rounded-2xl rounded-tl-none px-4 py-2.5 text-sm text-text">
-                ${text}
-            </p>
-        `;
-        chatMessages.appendChild(messageArticle);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        `
+        const p = document.createElement("p")
+        p.className = "bg-white border border-border/50 shadow-sm rounded-2xl rounded-tl-none px-4 py-2.5 text-sm text-text"
+        p.innerHTML = markdawnParse as string
+        messageArticle.appendChild(p)
+        chatMessages.appendChild(messageArticle)
+        chatMessages.scrollTop = chatMessages.scrollHeight
     }
 
-    chatInput?.addEventListener("input", autoResizeChatInput);
+    function fileToBase64 (file: File) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.readAsDataURL(file)
+            reader.onload = () => {
+           
+            if(reader && typeof reader.result === 'string'){
+                const base64String = reader.result.split(',')[1]
+                resolve(base64String)
+            }
+            }
+            reader.onerror = (error) => reject(error)
+        })
+    }
+
+    chatInput?.addEventListener("input", autoResizeChatInput)
     
     chatInput?.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            chatSendBtn?.click();
+            e.preventDefault()
+            chatSendBtn?.click()
         }
-    });
+    })
 
-    chatSendBtn?.addEventListener("click", () => {
-        if (!chatInput) return;
-        const text = chatInput.value.trim();
+    chatSendBtn?.addEventListener("click", async () => {
+        if (!chatInput) return
+        const text = chatInput.value.trim()
         
-        if (!text && selectedFiles.length === 0) return;
+        if (!text && selectedFiles.length === 0) return
 
-        const hasImages = selectedFiles.length > 0;
-        const currentFiles = [...selectedFiles];
+        const hasImages = selectedFiles.length > 0
+        const currentFiles = [...selectedFiles]
         
-        chatInput.value = "";
-        autoResizeChatInput();
+        chatInput.value = ""
+        autoResizeChatInput()
         
-        addUserMessage(text, currentFiles);
+        addUserMessage(text, currentFiles)
 
-        selectedFiles = [];
-        updatePreviews();
-        checkUploadButtonState();
+        selectedFiles = []
+        updatePreviews()
+        checkUploadButtonState()
 
-        setTimeout(() => {
-            addIAMessage(
-                hasImages 
-                    ? "He recibido tus imágenes y tu mensaje. Estoy analizando el contenido visual para ayudarte con el registro del producto."
-                    : "¡Hola! Soy tu asistente. Estoy analizando tu mensaje para ayudarte con el registro del producto.",
-            );
-        }, 600);
-    });
+        const base64Array = await Promise.all(currentFiles.map(file => fileToBase64(file))) as string[]
+        const { data,error } = (await actions.sendMessage({ text, files: hasImages ? base64Array : [] }))
+        if(error) return
+        
+        const { success, message } = data
+        if(success) addIAMessage(message)
+    })
 </script>
