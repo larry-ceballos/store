@@ -15,11 +15,13 @@ if (accessToken && refreshToken) {
 		access_token: accessToken,
 		refresh_token: refreshToken,
 	});
+	const user = sessionData.user;
 	const userRole =
-		sessionData.user?.app_metadata?.role ||
-		sessionData.user?.user_metadata?.role ||
+		user?.app_metadata?.role ||
+		user?.user_metadata?.role ||
 		"user";
 	isEditor = userRole === "editor";
+	Astro.cookies.set("sb-user-id", user?.id || "", { path:"/" });
 }
 
 // --- Password Recovery: PKCE flow via exchangeCodeForSession ---
